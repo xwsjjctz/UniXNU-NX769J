@@ -27,8 +27,12 @@ prelinked code with absolute symbols,
     .set   __ZN20IOBlockStorageDevice7doUnmapE..., 0xfffffff00496f074
 
 The addresses come from scripts/prelink-storage-bindings.json, measured once out
-of a build by scripts/scan-prelink-storage.py (the prelink closure is copied
-verbatim from the original kernelcache, so they do not move between builds).
+of the original kernelcache by scripts/scan-prelink-storage.py. The emitted image
+moves the whole prelink closure by the profile's kernel.prelink slide, recorded in
+the pin as collection_slide, so every measured address gets that slide here. An
+unslid metaclass lands in the kernel's own __DATA: on this image it read
+munger_tests data, and OSMetaClass::postModLoad faulted on superClassLink
+0xFEEDBEEF.
 The slot-to-name direction comes from compiling the same class here: the
 reference object's vtable is 190 relocated slots in declaration order, which is
 exactly how the original kext's dispatch table is laid out (the scan asserts the
@@ -169,11 +173,15 @@ def main() -> int:
     reference = compile_reference(OUT / (CLASS + '.reference.o'))
     names = vtable_names(reference)
 
+    if 'collection_slide' not in pin:
+        fail('the pin does not record collection_slide, the slide of the emitted prelink closure')
+    slide = int(pin['collection_slide'], 16)
+
     bindings = {
-        VTABLE: int(pin['vtable'], 16),
-        METACLASS: int(pin['metaclass'], 16),
-        METACLASS_POINTER: int(pin['metaclass_pointer'], 16),
-        DESTRUCTOR: int(pin['base_destructor'], 16),
+        VTABLE: int(pin['vtable'], 16) + slide,
+        METACLASS: int(pin['metaclass'], 16) + slide,
+        METACLASS_POINTER: int(pin['metaclass_pointer'], 16) + slide,
+        DESTRUCTOR: int(pin['base_destructor'], 16) + slide,
     }
     # The class is abstract, so the two complete-deleting destructors are traps;
     # a concrete subclass supplies both, and binding them would be a lie.
@@ -183,11 +191,11 @@ def main() -> int:
         name = names[index]
         if name == PURE_VIRTUAL:
             continue
-        bindings.setdefault(name, slots[index])
+        bindings.setdefault(name, slots[index] + slide)
     # Both C1 and C2 are bound: which one the driver's constructor calls is the
     # compiler's choice, and in the kext they are the same function.
     for symbol in (CONSTRUCTOR + '1EPK11OSMetaClass', CONSTRUCTOR + '2EPK11OSMetaClass'):
-        bindings.setdefault(symbol, int(pin['protected_constructor'], 16))
+        bindings.setdefault(symbol, int(pin['protected_constructor'], 16) + slide)
 
     assembly = OUT / 'original-bindings.S'
     assembly.write_text(''.join(f'.globl {name}\n.set {name}, {value:#x}\n'

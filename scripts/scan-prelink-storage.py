@@ -248,6 +248,8 @@ def main() -> int:
                         help='build identity to take the kernelcache from (default d22ap)')
     parser.add_argument('--tree', type=Path, default=None,
                         help='the assembled UniXNU build tree (default: found under the UniXNU checkout)')
+    parser.add_argument('--collection-slide', default='-0x1000000',
+                        help='kernel.prelink slide of the OS profile; addresses here are measured unslid')
     parser.add_argument('--output', type=Path, default=DEVICE / 'scripts/prelink-storage-bindings.json')
     parser.add_argument('--scratch', type=Path, default=None, help='where to put the reference object')
     args = parser.parse_args()
@@ -409,6 +411,7 @@ def main() -> int:
     pin = {
         'kext': KEXT,
         'source': 'prelink closure of the original kernelcache',
+        'collection_slide': args.collection_slide,
         'measured_from': origin,
         'kernelcache_sha256': hashlib.sha256(fat).hexdigest(),
         'slot_count': SLOTS,

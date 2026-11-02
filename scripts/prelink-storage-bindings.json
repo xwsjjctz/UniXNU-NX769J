@@ -1,6 +1,7 @@
 {
   "kext": "com.apple.iokit.IOStorageFamily",
   "source": "prelink closure of the original kernelcache",
+  "collection_slide": "-0x1000000",
   "measured_from": "kernelcache.release.iphone10b",
   "kernelcache_sha256": "e6fa75598f47b5a9460a60913e2ac8e4cd6cd60eb475bb31da65b68ffbcfdad5",
   "slot_count": 190,
