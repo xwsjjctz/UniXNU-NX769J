@@ -21,12 +21,12 @@ transcribed from photographs of the display and quoted verbatim below.
 | hand-off | top sixteenth of the panel green | `DarwinEnter` painted its marker, `ExitBootServices` succeeded |
 | kernel | blue band below green | entry probe stage 1: kernel entry, MMU off |
 | kernel | magenta band below blue | entry probe stage 2: just before the MMU is enabled |
-| stall | nothing further | the kernel stops after the MMU switch |
+| kernel | white and yellow strips below the hand-off text | `scripts/add-progress-strips.py`: post-MMU checkpoints |
 
-A screen holding **green, blue and magenta with no red band and no panic text**
-is the current state: the kernel runs, reaches the MMU switch and stops. An
-early exception would have painted the top band red (the loader installs its own
-`VBAR_EL1` before the branch and encodes ESR/ELR/FAR as bar codes).
+The three bands alone do not locate a stall. Magenta is painted before the MMU
+turns on, and the kernel installs its own `VBAR_EL1` before that point, so the
+loader's red band cannot report anything after it and a panic stays invisible
+until a console exists.
 
 ## Error progression, in the order the runs happened
 
@@ -90,6 +90,19 @@ The panic screen and a stage-4 reset probe share the zero padding after `_start`
 and do not both fit: with a probe armed the panic screen needs `0xa1f` bytes
 against `0x970` remaining, and `scripts/patch-xnu-entry-probe.py` refuses.
 
+Reset probes could not locate the stall. Every probe after `ml_parse_cpu_topology`
+was past the stall and so never fired. One immediate reset before `arm_vm_init`
+rebooted once on 2026-11-01, and the same images did not reboot when repeated on
+2026-11-02, so that reboot is unexplained and is not evidence of reaching that
+call.
+
+Progress strips replaced them. The first strip image stopped at strip 7, the call
+to `ml_parse_cpu_topology`. The cause is `unixnu,cluster-type` on a kernel with
+`MAX_CPU_CLUSTERS` 1: the first P core gives `phys_cluster_id` 1 and fails
+`assert(phys_cluster_id <= MAX_CPU_CLUSTER_PHY_ID)`. Removing the property from
+the DTS moved the last strip from `ml_parse_cpu_topology` to the `set_mmu_ttb`
+call in `arm_vm_init`, which was the last checkpoint in that image.
+
 ## Runs
 
 | Date | boot.img sha256 (16) | vendor_boot | Panel result |
@@ -98,4 +111,17 @@ against `0x970` remaining, and `scripts/patch-xnu-entry-probe.py` refuses.
 | 2026-10-31 | `e9a9e712cbec09aa` | 64 MiB payload | green, blue, magenta, stall |
 | 2026-10-31 | `d97fe9698e5d7632` | `vendor_boot_a_512m` | green, blue, magenta, stall |
 | 2026-10-31 | `d97fe9698e5d7632` | payload without `serial=3` | unchanged |
-| 2026-11-01 | `d97fe9698e5d7632` | `probe31`, reset 8 s after `_arm_vm_init` | pending |
+| 2026-11-01 | `c07d17d10435472e` | `probe31`, reset 8 s after `_arm_vm_init` | no reset |
+| 2026-11-01 | `c07d17d10435472e` | `probe31before`, immediate reset before `_arm_vm_init` | rebooted once, next boot held the bands |
+| 2026-11-02 | `dc774b738e8be9a2` | `probe6`, reset 8 s after the first `bzero` in `_arm_vm_init` | no reset |
+| 2026-11-02 | `dc774b738e8be9a2` | `probe6before`, immediate reset before that `bzero` | one logo hang, then no reset on the reflash |
+| 2026-11-02 | `dc774b738e8be9a2` | `probe2before`, immediate reset before `_early_random` | no reset |
+| 2026-11-02 | `c07d17d10435472e` | `probe31before`, exact repeat | no reset |
+| 2026-11-02 | `dc774b738e8be9a2` | `strips` | strips 1, 2, 4 to 7; strip 3 is a branch not taken |
+| 2026-11-02 | `dc774b738e8be9a2` | `nocluster`, no `unixnu,cluster-type` | strips 1, 2, 4 to 18, 20; strips 3 and 19 are branches not taken |
+| 2026-11-02 | `dc774b738e8be9a2` | `strips2`, 26 checkpoints | every strip through `load_context` except `arm_auxkc_init`, a branch not taken; no console text |
+| 2026-11-02 | `dc774b738e8be9a2` | `strips3`, bootstrap thread and panic reports | stops after `PE_init_iokit`; exception at PC `0xfffffff00780b790`, `OSMetaClass::postModLoad`, following `superClassLink` |
+| 2026-11-02 | `dc774b738e8be9a2` | `strips4`, fault report | PC as above, FAR `0xfeedbeff`, ESR `0x96000005`, x21 `0xfeedbeef`, x26 167, class `NativeUfsBlock`; the storage bindings were unslid and `gMetaClass` landed in `munger_tests` |
+| 2026-11-02 | `dc774b738e8be9a2` | `slidefix`, slid storage bindings and rebuilt drivers | past `PE_init_iokit` and `initialize_screen`; `panic("failed to get mix-n-match policy: %d")` from AppleImage4 during `mac_policy_initmach`, caller `0xfffffff0046ecf60`; no console text |
+| 2026-11-02 | `dc774b738e8be9a2` | `img4`, AppleImage4 `/chosen` properties | same strips; `panic("failed to read boot nonce hash: secure boot level = %#llx: %d")`, caller `0xfffffff0046ecf8c`; `manifest-properties` had no `BNCH` |
+| 2026-11-02 | `dc774b738e8be9a2` | `bnch`, 48-byte `BNCH` | same strips; `panic("failed to get previous stage manifest hash: %d")` from the nonce manager, caller `0xfffffff0046f06a0`; `/chosen/boot-manifest-hash` was missing |
