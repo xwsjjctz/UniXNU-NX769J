@@ -181,12 +181,40 @@
 "crypto-hash-method" = "sha2-384"
 
 
+["adt"."chosen"."bytes"]
+# iBoot publishes this. The AppleImage4 nonce manager reads it with no tolerance
+# for a missing value ("failed to get previous stage manifest hash"). No signed
+# manifest exists on this boot, so it is a fixed SHA-384 of
+# "UniXNU nx769j boot manifest", the length crypto-hash-method declares.
+"boot-manifest-hash" = "0e85ab6bedc8fda6245581102ead004aa77adfe532b118f79447d35705f4c4f782fb5b31bf5711046946f9ecd855b1d1"
+
+
 ["adt"."chosen"."u32"]
 "certificate-production-status" = 0
 "effective-production-status-ap" = 0
 "certificate-security-mode" = 1
 "effective-security-mode-sep" = 1
+# iBoot publishes these. AppleImage4 reads each from /chosen as a u32, and a
+# missing mix-n-match-prevention-status panics the kernel during
+# mac_policy_initmach ("failed to get mix-n-match policy: 2"). Zero is the
+# permissive value: this boot has no signed manifest chain to protect.
+"mix-n-match-prevention-status" = 0
+"effective-security-mode-ap" = 1
+"internal-use-only-unit" = 0
+"research-enabled" = 0
+"engineering-use-only-unit" = 0
+"factory-prerelease-global-trust" = 0
 "amfi-only-platform-code" = 1
+
+
+# iBoot publishes the boot nonce hash here. AppleImage4 reads 48 bytes of BNCH from
+# /chosen/manifest-properties and panics without it when the secure boot level is
+# zero ("failed to read boot nonce hash"). No signed manifest checks this value on
+# this boot, so it is a fixed SHA-384 of "UniXNU nx769j boot nonce".
+["adt"."manifest_properties"]
+
+["adt"."manifest_properties"."bytes"]
+"BNCH" = "e5f693081a58c4714d8902699c8b04033fab693624a8f455319887322de2eaec0d5fac2e84f98fe9a311e045000fd1ba"
 
 
 ["adt"."product"]
