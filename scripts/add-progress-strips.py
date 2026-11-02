@@ -81,12 +81,13 @@ REPORTS = [
         ('fault ESR', f'  ldr w15, [x1, #{SAVED_ESR:#x}]\n'),
         ('fault LR low', f'  ldr x15, [x1, #{SAVED_LR:#x}]\n'),
         ('fault x0 low', f'  ldr x15, [x1, #{SAVED_X(0)}]\n'),
-        ('fault x1 low', f'  ldr x15, [x1, #{SAVED_X(1)}]\n'),
-        ('fault x8 low', f'  ldr x15, [x1, #{SAVED_X(8)}]\n'),
     ]),
     ('_panic', [
         ('panic caller low', '  mov x15, x30\n'),
         ('panic format string low', '  mov x15, x0\n'),
+        # Darwin arm64 passes variadic arguments on the stack.
+        ('panic first argument low', '  ldr x15, [sp]\n'),
+        ('panic second argument low', '  ldr x15, [sp, #8]\n'),
     ]),
     ('_Assert', [
         ('assert caller low', '  mov x15, x30\n'),
