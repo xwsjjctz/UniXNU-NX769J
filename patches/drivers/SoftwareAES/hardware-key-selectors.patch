@@ -1,0 +1,36 @@
+diff --git a/NativeAES.cpp b/NativeAES.cpp
+index febdc09..e7e879f 100644
+--- a/NativeAES.cpp
++++ b/NativeAES.cpp
+@@ -37,6 +37,9 @@ public:
+ };
+ OSDefineMetaClassAndStructors(NativeAES, IOAESAccelerator)
+ 
++// A selector no caller uses, so the known answer test can exercise the refusal path.
++static const uint32_t kUnsupportedKeySelector = 0xFFFFFFFF;
++
+ // No padding, hidden device keys, or change to the registered corecrypto modes.
+ static int cbc(const unsigned char *input, unsigned char *output, size_t bytes,
+                unsigned char iv[16], const IOAESKeyData &key, IOAESOperation operation)
+@@ -110,7 +113,7 @@ static bool knownAnswerTest(NativeAES *provider)
+     !provider->performAES(source, destination, 64, &publicIV, IOAESEncrypt, &key, 16, 32, callback, &completion) &&
+     destination->readBytes(32, output, 64) == 64 && !memcmp(output, expected, 64) &&
+     !memcmp(publicIV.bytes, expected + 48, 16) && completion.count == 1 && completion.status == 0;
+-  key.selector = 2001; // Original hardware-key selector, deliberately unsupported.
++  key.selector = kUnsupportedKeySelector;
+   interface = interface && provider->performAES(source, destination, 64, &publicIV,
+     IOAESEncrypt, &key, 16, 32, callback, &completion) == kIOReturnUnsupported && completion.count == 1 &&
+     destination->readBytes(32, output, 64) == 64 && !memcmp(output, expected, 64) &&
+@@ -152,7 +155,11 @@ IOReturn NativeAES::performAES(IOMemoryDescriptor *input, IOMemoryDescriptor *ou
+ {
+   if (!input || !output || !key || !iv || !bytes || (bytes & 15) ||
+       (key->bits != 128 && key->bits != 192 && key->bits != 256)) return kIOReturnBadArgument;
+-  if (key->selector || (operation != IOAESEncrypt && operation != IOAESDecrypt)) {
++  // AppleImage4 wraps its nonce seeds with a hardware-key selector and panics on
++  // failure. There is no hardware key here, so those requests run in software with
++  // the bytes the caller passed. They protect nothing and exist to let boot proceed.
++  if (key->selector == kUnsupportedKeySelector ||
++      (operation != IOAESEncrypt && operation != IOAESDecrypt)) {
+     __atomic_fetch_add(&native_aes_unsupported_key, 1, __ATOMIC_RELAXED);
+     return kIOReturnUnsupported;
+   }
