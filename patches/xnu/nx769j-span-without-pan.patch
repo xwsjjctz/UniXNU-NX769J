@@ -1,0 +1,43 @@
+diff -ru a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+--- a/bsd/kern/bsd_init.c	2026-11-03 19:10:40
++++ b/bsd/kern/bsd_init.c	2026-11-03 19:10:40
+@@ -1356,8 +1356,12 @@
+ 		delay(15 * 1000 * 1000);
+ 		uint64_t seconds = 0;
+ 		absolutetime_to_nanoseconds(mach_absolute_time(), &seconds);
++		static int nx769j_last_nprocs = -1;
+ 		printf("NX769J alive %llus nprocs %d\n", seconds / NSEC_PER_SEC, nprocs);
+-		nx769j_sample_launchd();
++		if (nprocs == nx769j_last_nprocs) {
++			nx769j_sample_launchd();
++		}
++		nx769j_last_nprocs = nprocs;
+ 	}
+ }
+ 
+diff -ru a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
+--- a/osfmk/arm64/proc_reg.h	2026-11-03 19:10:40
++++ b/osfmk/arm64/proc_reg.h	2026-11-03 19:10:40
+@@ -643,8 +643,21 @@
+ #define SCTLR_JOP_KEYS_DEFAULT  0
+ #endif
+ 
++/*
++ * SPAN=0 makes every exception into EL1 set PSTATE.PAN. A kernel built
++ * without __ARM_PAN_AVAILABLE__ never clears PAN around copyio, so on a CPU
++ * that implements PAN (the SM8650 cores do) the first copyin of a system call
++ * takes a permission fault that arm_fast_fault reports as handled, forever.
++ * Leave PAN unchanged instead; the bit is RES1 on CPUs without PAN.
++ */
++#if __ARM_PAN_AVAILABLE__
++#define SCTLR_SPAN_DEFAULT      0
++#else
++#define SCTLR_SPAN_DEFAULT      SCTLR_PAN_UNCHANGED
++#endif
++
+ #define SCTLR_EL1_DEFAULT \
+-	(SCTLR_RESERVED | SCTLR_UCI_ENABLED | SCTLR_nTWE_WFE_ENABLED | SCTLR_DZE_ENABLED | \
++	(SCTLR_RESERVED | SCTLR_SPAN_DEFAULT | SCTLR_UCI_ENABLED | SCTLR_nTWE_WFE_ENABLED | SCTLR_DZE_ENABLED | \
+ 	 SCTLR_I_ENABLED | SCTLR_SED_DISABLED | SCTLR_CP15BEN_ENABLED |                    \
+ 	 SCTLR_SA0_ENABLED | SCTLR_SA_ENABLED | SCTLR_C_ENABLED | SCTLR_M_ENABLED |        \
+ 	 SCTLR_CSEH_DEFAULT | SCTLR_DSSBS_DEFAULT |                                        \

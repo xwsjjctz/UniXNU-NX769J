@@ -1,0 +1,115 @@
+diff -ru a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+--- a/bsd/kern/bsd_init.c	2026-11-03 18:24:30
++++ b/bsd/kern/bsd_init.c	2026-11-03 18:24:30
+@@ -1288,6 +1288,56 @@
+ 
+ /* NX769J: print uptime and process count every 15 seconds after launchd starts. */
+ void nx769j_heartbeat(void *, wait_result_t);
++extern int nx769j_task_sample(task_t, uint64_t *, int, uint64_t *);
++#include <sys/bsdtask_info.h>
++
++/* Name the mapping an address falls in: file path and file offset. */
++static void
++nx769j_where(const char *what, task_t task, uint64_t addr)
++{
++	struct proc_regioninfo_internal info;
++	uintptr_t vp = 0;
++	uint32_t vid = 0;
++	char path[128];
++	int length = sizeof(path);
++
++	bzero(&info, sizeof(info));
++	path[0] = 0;
++	if (addr == 0 || !fill_procregioninfo(task, addr, &info, &vp, &vid) || info.pri_address > addr) {
++		printf("NX769J   %s 0x%llx unmapped\n", what, addr);
++		return;
++	}
++	if (vp && vnode_getwithvid((vnode_t)vp, vid) == 0) {
++		vn_getpath((vnode_t)vp, path, &length);
++		vnode_put((vnode_t)vp);
++	}
++	printf("NX769J   %s 0x%llx = %s+0x%llx region 0x%llx flags 0x%x\n", what, addr,
++	    path[0] ? path : "anon", addr - info.pri_address + info.pri_offset, info.pri_address, info.pri_flags);
++}
++
++/* Where each launchd thread is: blocked in the kernel, or running in user space. */
++static void
++nx769j_sample_launchd(void)
++{
++	uint64_t rows[4 * 8], info[3];
++	proc_t init = proc_find(1);
++
++	if (init == PROC_NULL) {
++		return;
++	}
++	task_t task = proc_task(init);
++	int count = nx769j_task_sample(task, rows, 4, info);
++	printf("NX769J  launchd threads %d cache slide 0x%llx header 0x%llx dyld info 0x%llx\n",
++	    count, info[0], info[1], info[2]);
++	for (int i = 0; i < count; i++) {
++		uint64_t *row = rows + 8 * i;
++		printf("NX769J  tid %llu state 0x%llx hint %llu x16 %lld event 0x%llx cont 0x%llx sp 0x%llx\n",
++		    row[0], row[1] & 0xffffffffULL, row[1] >> 32, (long long)row[7], row[2], row[3], row[6]);
++		nx769j_where("pc", task, row[4]);
++		nx769j_where("lr", task, row[5]);
++	}
++	proc_rele(init);
++}
+ void
+ nx769j_heartbeat(__unused void *arg, __unused wait_result_t wr)
+ {
+@@ -1296,6 +1346,7 @@
+ 		uint64_t seconds = 0;
+ 		absolutetime_to_nanoseconds(mach_absolute_time(), &seconds);
+ 		printf("NX769J alive %llus nprocs %d\n", seconds / NSEC_PER_SEC, nprocs);
++		nx769j_sample_launchd();
+ 	}
+ }
+ 
+diff -ru a/osfmk/kern/bsd_kern.c b/osfmk/kern/bsd_kern.c
+--- a/osfmk/kern/bsd_kern.c	2026-11-03 18:24:30
++++ b/osfmk/kern/bsd_kern.c	2026-11-03 18:24:30
+@@ -1510,3 +1510,43 @@
+ 		return KERN_FAILURE;
+ 	}
+ }
++
++/*
++ * NX769J: sample a task's threads for the heartbeat in bsd_init. Each row is
++ * thread id, block hint << 32 | state, wait event, continuation, then the
++ * user pc, lr, sp and x16 (the syscall number while in a trap).
++ */
++#include <vm/vm_shared_region.h>
++int nx769j_task_sample(task_t task, uint64_t *rows, int max, uint64_t info[3]);
++int
++nx769j_task_sample(task_t task, uint64_t *rows, int max, uint64_t info[3])
++{
++	int count = 0;
++	thread_t thread;
++	vm_shared_region_t region = vm_shared_region_get(task);
++
++	info[0] = region ? region->sr_slide : 0;
++	if (region) {
++		vm_shared_region_deallocate(region);
++	}
++	info[1] = task->mach_header_vm_address;
++	info[2] = task->all_image_info_addr;
++	task_lock(task);
++	queue_iterate(&task->threads, thread, thread_t, task_threads) {
++		if (count >= max) {
++			break;
++		}
++		const arm_saved_state_t *state = get_user_regs(thread);
++		uint64_t *row = rows + 8 * count++;
++		row[0] = thread->thread_id;
++		row[1] = ((uint64_t)thread->block_hint << 32) | (uint32_t)thread->state;
++		row[2] = (uint64_t)VM_KERNEL_UNSLIDE_OR_PERM((vm_offset_t)thread->wait_event);
++		row[3] = (uint64_t)VM_KERNEL_UNSLIDE((vm_offset_t)thread->continuation);
++		row[4] = state ? get_saved_state_pc(state) : 0;
++		row[5] = state ? get_saved_state_lr(state) : 0;
++		row[6] = state ? get_saved_state_sp(state) : 0;
++		row[7] = state ? get_saved_state_reg(state, 16) : 0;
++	}
++	task_unlock(task);
++	return count;
++}

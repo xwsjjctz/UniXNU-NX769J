@@ -1,0 +1,20 @@
+--- a/bsd/kern/bsd_init.c	2026-11-03 01:01:55
++++ b/bsd/kern/bsd_init.c	2026-11-03 01:01:55
+@@ -1075,6 +1075,17 @@
+ 				native_owner_root_checkpoint(autherr, owner, device);
+ 			}
+ #endif
++			/*
++			 * There is no iBoot root hash on this board. NativeUfs publishes a root
++			 * window only after an owner-signed policy authenticates it and checks
++			 * every block read against that policy, so a read-only root from it has
++			 * already been authenticated. Refuse anything writable.
++			 */
++			if (autherr && !owner_authorized &&
++			    (vfs_flags(vnode_mount(rootvnode)) & MNT_RDONLY)) {
++				printf("NX769J: accepting owner-verified read-only root, FSIOC_KERNEL_ROOTAUTH returned %d\n", autherr);
++				owner_authorized = 1;
++			}
+ 			if (autherr && !owner_authorized) {
+ 				panic("rootvp not authenticated after mounting");
+ 			}

@@ -1,0 +1,13 @@
+diff -ru a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+--- a/iokit/KernelConfigTables.cpp	2026-11-03 19:38:41
++++ b/iokit/KernelConfigTables.cpp	2026-11-03 19:38:41
+@@ -78,7 +78,8 @@
+     "     'IOProbeScore'    = 1000:32;"
+     "   }"
+ #endif
+-#if defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK
++/* NX769J links RamBlock through EXTRA_LD_ARCHIVES; with SOURCE_STORAGE the build passes no XNU_NATIVE_RAM_BLOCK here. */
++#if (defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK) || defined(XNU_NATIVE_UFS)
+     "   ,{"
+     "     'IOClass'         = NativeRamBlock;"
+     "     'IOMatchCategory' = NativeRamBlock;"

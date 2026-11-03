@@ -39,7 +39,7 @@ CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 #
 # [kernel] archives builds both before the link; this puts them on the link line
 # so ld64 pulls the members in against the driver's unresolved references.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a -Wl,-force_load,{tree}/build/apple-key-store-state/libAppleKeyStoreState.a -Wl,-force_load,{tree}/build/nx769j-keystore/libNX769JKeyStore.a -Wl,-force_load,{tree}/build/ram-block/libRamBlock.a"
 
 # Display. GopFramebuffer presents through the UEFI GOP framebuffer that the
 # uefi-nx769j firmware publishes, but its kernel-side provider is a late
@@ -60,16 +60,35 @@ CONFIG_XNU_NATIVE_ADRENO=n
 # Not a QEMU board. The ArmVirtPlatform expert would claim the platform.
 # CONFIG_XNU_ARMVIRT_PLATFORM is not set
 
-# RAM block storage is not used on this board; the root volume is the UFS OS
-# window and persistence is the UFS Data region.
-# CONFIG_XNU_NATIVE_RAM_BLOCK is not set
-
 # No board PMGR driver is selected yet. The SM8650 has no Apple PMGR block, and
 # the caihong SM8650 port reports "AMFI: No PMGR?" panics from the AMFI early
 # security init path on this SoC family.
 # CONFIG_XNU_SHENG_PMGR is not set
 
-# Owner chain knobs stay off until the OS window's APFS volume UUID and the
-# SystemOS cryptex volume UUID are read from the installed images. Once known,
-# set CONFIG_XNU_OWNER_DATA_VOLUME_UUID and CONFIG_XNU_OWNER_CACHE_VOLUME_UUID
-# and enable the matching CONFIG_XNU_OWNER_* paths.
+# Owner chain. NativeUfs verifies both root windows against owner-signed
+# policies with the source corecrypto build, which is what SOURCE_STORAGE
+# declares. ROOT_TRUST accepts the OS root only when its media is one of those
+# windows. CACHE_MOUNT unions the SystemOS window over / so dyld finds the
+# shared cache; without it launchd stops at shared_region check_np.
+# The UUIDs are the ones signed into scripts/policies/ios-16.5-20F66.
+CONFIG_XNU_SOURCE_STORAGE=y
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block-verified-bundle/libVirtioMmioBlock.a"
+CONFIG_XNU_OWNER_ROOT_AUDIT=y
+CONFIG_XNU_OWNER_ROOT_TRUST=y
+CONFIG_XNU_OWNER_CACHE_MOUNT=y
+CONFIG_XNU_OWNER_CACHE_STARTUP=y
+CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
+CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="556915A0-5005-4DE5-B3E4-6B489DBB4C1A"
+CONFIG_XNU_OWNER_ROOT_VOLUME_UUID="97A3EB1A-5218-4936-BC85-9574EC2C8CC9"
+
+# Writable /private/var: a packed APFS seed (scripts/build-data-seed.py) travels
+# in the payload, RamBlock serves it from RAM and load_init_program mounts it.
+# It is reset on every boot. The UUID is the seed's own volume, printed by the
+# seed builder; rebuild the kernel when the seed is rebuilt. With SOURCE_STORAGE
+# the build script neither links RamBlock nor adds its personality, so the
+# archive is in EXTRA_LD_ARCHIVES and patches/xnu/nx769j-ram-block-personality.patch
+# adds the personality.
+CONFIG_XNU_NATIVE_RAM_BLOCK=y
+CONFIG_XNU_OWNER_BOOT_MANIFEST=y
+CONFIG_XNU_OWNER_DATA_MOUNT=y
+CONFIG_XNU_OWNER_DATA_VOLUME_UUID="09A4C386-8B5A-46F3-8817-D0B96D69AC3C"

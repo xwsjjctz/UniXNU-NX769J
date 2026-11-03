@@ -51,6 +51,10 @@ include = [
   "VirtioMmioBlock",
   "VerifiedRoot",
   "GopFramebuffer",
+  # No SEP and no AppleSEPKeyStore in the kernelcache: keybagd needs this stand-in (sheng-aks=1).
+  "AppleKeyStoreState",
+  # Holds the packed Data seed in RAM and publishes it as the /private/var volume.
+  "RamBlock",
 ]
 
 [kernel]
@@ -83,6 +87,13 @@ archives = [
   "component:ShengUfs",
   "build-verified-root.py",
   "component:VirtioMmioBlock",
+  # The owner root and SystemOS mount call native_verified_block_* from the
+  # verified build of this driver; it asks NativeUfs whether a medium is an
+  # authenticated window. CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE selects it.
+  "build-arm-driver.py VirtioMmioBlock --verified-root --verified-root-bundle",
+  "component:AppleKeyStoreState",
+  "component:RamBlock",
+  "build-nx769j-keystore.py",
   "build-storage-bindings.py",
 ]
 config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "os:configs/ios.config"]
@@ -125,7 +136,9 @@ patch_series = ["device:patches/xnu/series"]
 # the stock system bootable, carve a separate unixnu partition first; see
 # README.md and https://unixnu.com/porting/dual-system-partition.
 first_lba = 3302184
-last_lba = 124002298
+# Re-read from the device with native-ufs-probe=10 and matched against the size
+# of /data. The earlier 124002298 described a different partition table.
+last_lba = 61521914
 lba_bytes = 4096
 windows = [
   { name = "OS", component = "OS" },
@@ -235,7 +248,8 @@ loader = "firmware"
 title = "UniXNU"
 # Handoff window passed to the ADT tool, not the installed DRAM size.
 dram_size = "0x80000000"
-panic_screen = true
+# The text console shows panics now; the panic screen shares the padding after _start with the entry probes.
+panic_screen = false
 # Adds a Tools entry to the generated boot menu, which is where AdvancedLogDxe
 # publishes the firmware log as QR codes. See docs/UEFI-FIRMWARE.md.
 tools = true
@@ -243,7 +257,15 @@ timeout = 3
 # serial=3 selects the Apple SoC UART, which this board does not expose: the kernel
 # spins in serial init and never reaches the MMU. Verbose stays on so the panic
 # screen and the entry-probe bars still report progress.
-kernel_args = ["-v"]
+# debug=0x8 sends kernel printf to the text console (patches/xnu/nx769j-verbose-text-console.patch).
+# The images that reach the iOS userland boot with
+#   -v debug=0x8 native-ufs-root=1 launchd_unsecure_cache=1 sheng-aks=1
+# but payload.py refuses native-ufs-root=1 without sheng-pmgr=2, and this board
+# has no PMGR driver (AMFI's PMGR lookup is patched out instead). Until that
+# check knows about the board, build the payload with native-ufs-probe=10 and
+# replace the args line in the payload's unixnu.toml; docs/DEVICE-EVIDENCE.md
+# lists the images built that way.
+kernel_args = ["-v", "debug=0x8", "native-ufs-probe=10"]
 
 [payload.adt]
 chip_id = "207"

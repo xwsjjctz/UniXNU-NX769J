@@ -62,3 +62,11 @@ linux-clang-uio-stackbuf-align.patch
 linux-clang-kalloc-pointee-type.patch
 linux-clang-iorpc-kernel-content.patch
 xnu-8796-arm64-kpc-backend.patch
+nx769j-verbose-text-console.patch
+nx769j-owner-verified-root.patch
+nx769j-userland-trace.patch
+nx769j-launchd-sampler.patch
+nx769j-irq-sampler.patch
+nx769j-span-without-pan.patch
+nx769j-keystore-publish.patch
+nx769j-ram-block-personality.patch

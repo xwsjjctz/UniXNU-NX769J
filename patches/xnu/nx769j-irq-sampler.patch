@@ -1,0 +1,123 @@
+diff -ru a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+--- a/bsd/kern/bsd_init.c	2026-11-03 18:43:19
++++ b/bsd/kern/bsd_init.c	2026-11-03 18:43:19
+@@ -1319,7 +1319,7 @@
+ static void
+ nx769j_sample_launchd(void)
+ {
+-	uint64_t rows[4 * 8], info[3];
++	uint64_t rows[4 * 12], info[3];
+ 	proc_t init = proc_find(1);
+ 
+ 	if (init == PROC_NULL) {
+@@ -1330,13 +1330,24 @@
+ 	printf("NX769J  launchd threads %d cache slide 0x%llx header 0x%llx dyld info 0x%llx\n",
+ 	    count, info[0], info[1], info[2]);
+ 	for (int i = 0; i < count; i++) {
+-		uint64_t *row = rows + 8 * i;
++		uint64_t *row = rows + 12 * i;
+ 		printf("NX769J  tid %llu state 0x%llx hint %llu x16 %lld event 0x%llx cont 0x%llx sp 0x%llx\n",
+ 		    row[0], row[1] & 0xffffffffULL, row[1] >> 32, (long long)row[7], row[2], row[3], row[6]);
++		printf("NX769J   args 0x%llx 0x%llx 0x%llx 0x%llx\n", row[8], row[9], row[10], row[11]);
+ 		nx769j_where("pc", task, row[4]);
+ 		nx769j_where("lr", task, row[5]);
+ 	}
+ 	proc_rele(init);
++
++	extern volatile uint64_t nx769j_irq_ring[16][5];
++	extern volatile uint32_t nx769j_irq_next;
++	uint32_t next = nx769j_irq_next;
++	printf("NX769J  irq samples on pid 1: %u\n", next);
++	for (uint32_t i = next > 3 ? next - 3 : 0; i < next; i++) {
++		volatile uint64_t *entry = nx769j_irq_ring[i & 15];
++		printf("NX769J   %s tid %llu pc 0x%llx lr 0x%llx fr 0x%llx 0x%llx\n",
++		    (entry[0] & 1) ? "kern" : "user", entry[0] >> 8, entry[1], entry[2], entry[3], entry[4]);
++	}
+ }
+ void
+ nx769j_heartbeat(__unused void *arg, __unused wait_result_t wr)
+diff -ru a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+--- a/osfmk/arm64/sleh.c	2026-11-03 18:43:19
++++ b/osfmk/arm64/sleh.c	2026-11-03 18:43:19
+@@ -1846,6 +1846,43 @@
+ 	__builtin_unreachable();
+ }
+ 
++/*
++ * NX769J: every interrupt that lands on pid 1 records the interrupted pc,
++ * lr and two frame-pointer return addresses, unslid when in the kernel.
++ * The heartbeat in bsd_init prints the newest entries.
++ */
++volatile uint64_t nx769j_irq_ring[16][5];
++volatile uint32_t nx769j_irq_next;
++static void
++nx769j_irq_sample(arm_saved_state_t *state)
++{
++	thread_t thread = current_thread();
++	task_t task = get_threadtask(thread);
++	void *proc = (task && task != kernel_task) ? get_bsdtask_info(task) : NULL;
++
++	if (proc == NULL || proc_pid((struct proc *)proc) != 1) {
++		return;
++	}
++	uint64_t cpsr = get_saved_state_cpsr(state);
++	int kernel = (cpsr & 0xc) != 0;
++	uint64_t frames[2] = {0, 0};
++	if (kernel && thread->kernel_stack) {
++		vm_offset_t low = thread->kernel_stack, high = low + kernel_stack_size;
++		uint64_t fp = get_saved_state_fp(state);
++		for (int i = 0; i < 2 && fp >= low && fp + 16 <= high && (fp & 0xf) == 0; i++) {
++			frames[i] = VM_KERNEL_UNSLIDE(((uint64_t *)fp)[1]);
++			fp = ((uint64_t *)fp)[0];
++		}
++	}
++	uint32_t slot = nx769j_irq_next++ & 15;
++	uint64_t pc = get_saved_state_pc(state), lr = get_saved_state_lr(state);
++	nx769j_irq_ring[slot][0] = (uint64_t)kernel | ((uint64_t)thread->thread_id << 8);
++	nx769j_irq_ring[slot][1] = kernel ? VM_KERNEL_UNSLIDE(pc) : pc;
++	nx769j_irq_ring[slot][2] = kernel ? VM_KERNEL_UNSLIDE(lr) : lr;
++	nx769j_irq_ring[slot][3] = frames[0];
++	nx769j_irq_ring[slot][4] = frames[1];
++}
++
+ void
+ sleh_irq(arm_saved_state_t *state)
+ {
+@@ -1857,6 +1895,7 @@
+ 
+ 	sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
+ 	boot_progress_irq(get_saved_state_pc(state), get_saved_state_cpsr(state), get_saved_state_sp(state));
++	nx769j_irq_sample(state);
+ 
+ #if USE_APPLEARMSMP
+ 	PE_handle_ext_interrupt();
+@@ -1891,6 +1930,7 @@
+ 	uint64_t pmcr0 = 0, upmsr = 0;
+ #endif /* MONOTONIC_FIQ */
+ 
++	nx769j_irq_sample(state);
+ #if defined(HAS_IPI)
+ 	boolean_t    is_ipi = FALSE;
+ 	uint64_t     ipi_sr = 0;
+diff -ru a/osfmk/kern/bsd_kern.c b/osfmk/kern/bsd_kern.c
+--- a/osfmk/kern/bsd_kern.c	2026-11-03 18:43:19
++++ b/osfmk/kern/bsd_kern.c	2026-11-03 18:43:19
+@@ -1537,7 +1537,7 @@
+ 			break;
+ 		}
+ 		const arm_saved_state_t *state = get_user_regs(thread);
+-		uint64_t *row = rows + 8 * count++;
++		uint64_t *row = rows + 12 * count++;
+ 		row[0] = thread->thread_id;
+ 		row[1] = ((uint64_t)thread->block_hint << 32) | (uint32_t)thread->state;
+ 		row[2] = (uint64_t)VM_KERNEL_UNSLIDE_OR_PERM((vm_offset_t)thread->wait_event);
+@@ -1546,6 +1546,9 @@
+ 		row[5] = state ? get_saved_state_lr(state) : 0;
+ 		row[6] = state ? get_saved_state_sp(state) : 0;
+ 		row[7] = state ? get_saved_state_reg(state, 16) : 0;
++		for (unsigned reg = 0; reg < 4; reg++) {
++			row[8 + reg] = state ? get_saved_state_reg(state, reg) : 0;
++		}
+ 	}
+ 	task_unlock(task);
+ 	return count;

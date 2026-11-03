@@ -55,15 +55,6 @@ SITES = [
     ('_kernel_bootstrap_thread', '_kernel_startup_initialize_upto', 2, 'startup up to SYSCTL'),
     ('_kernel_bootstrap_thread', '_PE_init_iokit', 1, 'PE_init_iokit'),
     ('_kernel_bootstrap_thread', '_kernel_startup_initialize_upto', 3, 'startup up to EARLY_BOOT'),
-    ('_kernel_bootstrap_thread', '_initialize_screen', 1, 'initialize_screen'),
-    ('_kernel_bootstrap_thread', '_vm_commpage_init', 1, 'vm_commpage_init'),
-    ('_kernel_bootstrap_thread', '_mac_policy_initmach', 1, 'mac_policy_initmach'),
-    ('_kernel_bootstrap_thread', '_trust_cache_runtime_init', 1, 'trust_cache_runtime_init'),
-    ('_kernel_bootstrap_thread', '_kernel_startup_initialize_upto', 4, 'startup up to LOCKDOWN'),
-    ('_kernel_bootstrap_thread', '_machine_lockdown', 1, 'machine_lockdown'),
-    ('_kernel_bootstrap_thread', '_kernel_do_post', 1, 'kernel_do_post'),
-    ('_kernel_bootstrap_thread', '_PE_lockdown_iokit', 1, 'PE_lockdown_iokit'),
-    ('_kernel_bootstrap_thread', '_bsd_init', 1, 'bsd_init'),
 ]
 
 # Each report line is 32 bit cells, most significant bit on the left, white for 1

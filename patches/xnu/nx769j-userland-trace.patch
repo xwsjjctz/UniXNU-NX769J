@@ -1,0 +1,91 @@
+diff -ru a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+--- a/bsd/kern/bsd_init.c	2026-11-03 12:39:45
++++ b/bsd/kern/bsd_init.c	2026-11-03 12:39:45
+@@ -1275,8 +1275,28 @@
+ 
+ 	bsd_init_kprintf("bsd_do_post - done");
+ 
++	{
++		extern void nx769j_heartbeat(void *, wait_result_t);
++		thread_t nx769j_thread;
++		if (kernel_thread_start(nx769j_heartbeat, NULL, &nx769j_thread) == KERN_SUCCESS) {
++			thread_deallocate(nx769j_thread);
++		}
++	}
+ 	load_init_program(p);
+ 	lock_trace = 1;
++}
++
++/* NX769J: print uptime and process count every 15 seconds after launchd starts. */
++void nx769j_heartbeat(void *, wait_result_t);
++void
++nx769j_heartbeat(__unused void *arg, __unused wait_result_t wr)
++{
++	for (;;) {
++		delay(15 * 1000 * 1000);
++		uint64_t seconds = 0;
++		absolutetime_to_nanoseconds(mach_absolute_time(), &seconds);
++		printf("NX769J alive %llus nprocs %d\n", seconds / NSEC_PER_SEC, nprocs);
++	}
+ }
+ 
+ kern_return_t
+diff -ru a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+--- a/bsd/kern/kern_exec.c	2026-11-03 12:39:45
++++ b/bsd/kern/kern_exec.c	2026-11-03 12:39:45
+@@ -2135,7 +2135,7 @@
+ exec_activate_image(struct image_params *imgp)
+ {
+ 	struct nameidata *ndp = NULL;
+-	const char *excpath;
++	const char *excpath = NULL;
+ 	int error;
+ 	int resid;
+ 	int once = 1;   /* save SGUID-ness for interpreted files */
+@@ -2307,6 +2307,7 @@
+ 	proc_transend(p, 0);
+ 
+ bad_notrans:
++	printf("NX769J exec pid %d %s: %d\n", proc_getpid(p), excpath ? excpath : "?", error);
+ 	if (imgp->ip_strings) {
+ 		execargs_free(imgp);
+ 	}
+diff -ru a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+--- a/bsd/kern/kern_exit.c	2026-11-03 12:39:45
++++ b/bsd/kern/kern_exit.c	2026-11-03 12:39:45
+@@ -1854,6 +1854,14 @@
+ 	boot_progress_exit(proc_getpid(p),p->p_name,rv,
+ 	    p->p_exit_reason ? p->p_exit_reason->osr_namespace : 0,
+ 	    p->p_exit_reason ? p->p_exit_reason->osr_code : 0);
++	{
++		char *nx769j_desc = exit_reason_get_string_desc(p->p_exit_reason);
++		printf("NX769J exit pid %d %s: status 0x%x reason %u/0x%llx csflags 0x%x %s\n",
++		    proc_getpid(p), p->p_name, rv,
++		    p->p_exit_reason ? p->p_exit_reason->osr_namespace : 0,
++		    p->p_exit_reason ? p->p_exit_reason->osr_code : 0ULL,
++		    (unsigned)proc_getcsflags(p), nx769j_desc ? nx769j_desc : "");
++	}
+ 
+ 	if (p->p_crash_behavior != 0 || p == initproc) {
+ 		proc_handle_critical_exit(p, rv);
+diff -ru a/osfmk/kern/boot_progress.h b/osfmk/kern/boot_progress.h
+--- a/osfmk/kern/boot_progress.h	2026-11-03 12:39:45
++++ b/osfmk/kern/boot_progress.h	2026-11-03 12:39:45
+@@ -28,7 +28,17 @@
+ #define boot_progress_user_breakpoint(...) ((void)0)
+ #define boot_progress_user_abort(...) ((void)0)
+ #define boot_progress_critical_exit(...) ((void)0)
++/*
++ * NX769J: the panel console is the only output after launchd starts, so the
++ * per-process exec stages print there when the boot progress layer is absent.
++ */
++#if defined(KERNEL_PRIVATE) && defined(BSD_KERNEL_PRIVATE)
++extern int printf(const char *, ...);
++#define boot_progress_process_stage(pid, name, stage) \
++	printf("NX769J proc %d %s: %s\n", (int)(pid), (name), (stage))
++#else
+ #define boot_progress_process_stage(...) ((void)0)
++#endif
+ #define boot_progress_exit(...) ((void)0)
+ #endif
+ #endif

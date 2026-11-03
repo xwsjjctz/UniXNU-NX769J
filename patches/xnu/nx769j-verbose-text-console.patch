@@ -1,0 +1,20 @@
+--- a/pexpert/arm/pe_init.c	2026-11-02 23:38:27
++++ b/pexpert/arm/pe_init.c	2026-11-02 23:38:27
+@@ -518,6 +518,17 @@
+ 	 */
+ 	check_for_panic_log();
+ 
++	/*
++	 * DarwinBoot reports v_display 1, which selects graphics mode and leaves the
++	 * text console disabled, so -v prints nothing. There is no serial console on
++	 * this board. Honor -v, at twice the font size so a photograph can read it.
++	 */
++	int verbose = 0;
++	if (PE_parse_boot_argn("-v", &verbose, sizeof(verbose))) {
++		PE_state.video.v_display = 0;
++		PE_state.video.v_scale = kPEScaleFactor2x;
++	}
++
+ 	if (PE_state.video.v_display) {
+ 		PE_initialize_console(&PE_state.video, kPEGraphicsMode);
+ 	} else {
