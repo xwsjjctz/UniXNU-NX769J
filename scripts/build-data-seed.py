@@ -48,6 +48,8 @@ MIB = 1024 * 1024
 FILL_LIMIT = 0.85
 # The userland expects these under the Data root even when the OS image has none.
 EMPTY_DIRS = ('keybags', 'mobile/tmp', 'tmp', 'run')
+# launchd's override file for the system domain: {label: True} keeps a job from loading.
+LAUNCHD_DISABLED = 'db/com.apple.xpc.launchd/disabled.plist'
 # Copied into the seed but huge and replaceable on first boot.
 SKIP_DIRS = ('staged_system_apps',)
 
@@ -169,6 +171,9 @@ def main() -> int:
                         help='the UniXNU checkout holding drivers/DarwinBoot/Test/packed_ramdisk.py')
     parser.add_argument('--work', type=Path, default=None,
                         help='scratch directory (default: beside --output)')
+    parser.add_argument('--disable-job', action='append', default=[], metavar='LABEL',
+                        help='write LABEL into launchd\'s system disabled.plist, e.g. com.apple.watchdogd '
+                             '(it needs a hardware watchdog this board does not have)')
     args = parser.parse_args()
 
     if args.size_mib < 32:
@@ -222,6 +227,10 @@ def main() -> int:
         for name in EMPTY_DIRS:
             (mount / name).mkdir(parents=True, exist_ok=True)
         os.chmod(mount / 'tmp', 0o1777)
+        if args.disable_job:
+            disabled = mount / LAUNCHD_DISABLED
+            disabled.parent.mkdir(parents=True, exist_ok=True)
+            disabled.write_bytes(plistlib.dumps({label: True for label in args.disable_job}))
     finally:
         subprocess.run(['hdiutil', 'detach', device], check=True)
 
@@ -238,6 +247,7 @@ def main() -> int:
         'files': count,
         'file_bytes': total,
         'skipped_dirs': list(SKIP_DIRS),
+        'disabled_jobs': args.disable_job,
         'output': str(args.output),
         'output_sha256': hashlib.sha256(args.output.read_bytes()).hexdigest(),
         'output_bytes': args.output.stat().st_size,

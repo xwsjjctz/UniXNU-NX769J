@@ -98,17 +98,24 @@
 # The iPadOS 17.7.11 profile carries 0xfffffff005ab4ae0 for its own kernelcache.
 # Those addresses are version bound and must not be copied between profiles.
 # "early_security_init" = "com.apple.driver.AppleMobileFileIntegrity=<unslid __TEXT_EXEC address>"
+# Left out on purpose: com.apple.iokit.IOSurface and IOMobileGraphicsFamily, with
+# the two kexts that need them (AppleM2ScalerCSCDriver, IOGPUFamily). The board
+# display (package/NX769JDisplay) provides its own IOSurfaceRoot and
+# IOMobileFramebuffer, the way the houji port does, and two classes of one name
+# cannot be loaded. This kernelcache has no driver for the SM8650 display or GPU
+# to bind them to anyway.
+# com.apple.driver.AppleARMWatchdogTimer is left out too: it only matches Apple's
+# wdt,s5l8960x block, and its IOWatchdog class would clash with the board's
+# (package/display/SweetWatchdog.cpp), which watchdogd needs to stay up.
 # Bundle identifiers kept from this kernelcache. Every entry below is present in
 # the iOS 16.5 kernelcache's __PRELINK_INFO. The iPadOS 17.7.11 list also keeps
 # com.apple.iokit.IOHIDEventDriver, which this kernelcache does not contain.
 "roots" = [
   "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
   "com.apple.driver.AppleARMPlatform",
-  "com.apple.driver.AppleARMWatchdogTimer",
   "com.apple.driver.AppleAudioClockLibs",
   "com.apple.driver.AppleEffaceableStorage",
   "com.apple.driver.AppleIISController",
-  "com.apple.driver.AppleM2ScalerCSCDriver",
   "com.apple.driver.AppleMobileFileIntegrity",
   "com.apple.driver.ApplePMGR",
   "com.apple.driver.IODARTFamily",
@@ -118,14 +125,11 @@
   "com.apple.iokit.IOAudio2Family",
   "com.apple.iokit.IOCECFamily",
   "com.apple.iokit.IOCryptoAcceleratorFamily",
-  "com.apple.iokit.IOGPUFamily",
   "com.apple.iokit.IOHDCPFamily",
   "com.apple.iokit.IOHIDFamily",
-  "com.apple.iokit.IOMobileGraphicsFamily",
   "com.apple.iokit.IOReportFamily",
   "com.apple.iokit.IOSlowAdaptiveClockingFamily",
   "com.apple.iokit.IOStorageFamily",
-  "com.apple.iokit.IOSurface",
   "com.apple.kec.Libm",
   "com.apple.kec.corecrypto",
   "com.apple.kext.AppleMatch",
@@ -205,6 +209,12 @@
 "engineering-use-only-unit" = 0
 "factory-prerelease-global-trust" = 0
 "amfi-only-platform-code" = 1
+# iBoot writes the panel's scale and rotation here; MobileGestalt reads
+# /chosen/display-scale for main-screen-scale and defaults to 0, which makes
+# FrontBoard assert on "infxinf@0x". 3 is the iPhone X scale: the board display
+# renders the 1125x2436 iPhone X canvas (375x812 points).
+"display-scale" = 3
+"display-rotation" = 0
 
 
 # iBoot publishes the boot nonce hash here. AppleImage4 reads 48 bytes of BNCH from

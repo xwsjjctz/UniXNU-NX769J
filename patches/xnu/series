@@ -70,3 +70,7 @@ nx769j-irq-sampler.patch
 nx769j-span-without-pan.patch
 nx769j-keystore-publish.patch
 nx769j-ram-block-personality.patch
+nx769j-display-personality.patch
+nx769j-watchdog-personality.patch
+nx769j-watchdogd-not-fatal.patch
+nx769j-user-brk-report.patch

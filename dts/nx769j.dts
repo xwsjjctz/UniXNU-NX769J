@@ -58,6 +58,19 @@
             no-map;
         };
     };
+
+    // The display nub: IOMobileFramebuffer.framework counts /arm-io children
+    // with device_type "display-subsystem" and waits for that many
+    // IOMobileFramebuffer services. The board's AppleCLCD (package/display)
+    // matches this name and scans out of the GOP framebuffer in the splash
+    // region above, so the node needs no registers.
+    soc {
+        display {
+            compatible = "nx769j,display";
+            device_type = "display-subsystem";
+            unixnu,adt-name = "disp0";
+        };
+    };
 };
 
 // SM8650 CPU clusters, from mainline sm8650.dtsi (u-boot/u-boot

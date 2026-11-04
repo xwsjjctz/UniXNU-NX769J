@@ -8,7 +8,7 @@ diff -ru a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
 +		static int nx769j_last_nprocs = -1;
  		printf("NX769J alive %llus nprocs %d\n", seconds / NSEC_PER_SEC, nprocs);
 -		nx769j_sample_launchd();
-+		if (nprocs == nx769j_last_nprocs) {
++		if (nprocs <= 2 && nprocs == nx769j_last_nprocs) {
 +			nx769j_sample_launchd();
 +		}
 +		nx769j_last_nprocs = nprocs;

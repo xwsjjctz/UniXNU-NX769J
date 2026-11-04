@@ -1,0 +1,23 @@
+diff -ru a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+--- a/iokit/KernelConfigTables.cpp	2026-11-03 20:06:08
++++ b/iokit/KernelConfigTables.cpp	2026-11-03 20:06:08
+@@ -78,6 +78,19 @@
+     "     'IOProbeScore'    = 1000:32;"
+     "   }"
+ #endif
++/* NX769J display (package/display): the built-in IOSurfaceRoot on IOResources and the GOP framebuffer as AppleCLCD on /arm-io/disp0. */
++#if defined(XNU_NATIVE_UFS)
++    "   ,{"
++    "     'IOClass'         = IOCoreSurfaceRoot;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = IOCoreSurfaceRoot;"
++    "   }"
++    "   ,{"
++    "     'IOClass'         = AppleCLCD;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'nx769j,display';"
++    "   }"
++#endif
+ /* NX769J links RamBlock through EXTRA_LD_ARCHIVES; with SOURCE_STORAGE the build passes no XNU_NATIVE_RAM_BLOCK here. */
+ #if (defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK) || defined(XNU_NATIVE_UFS)
+     "   ,{"

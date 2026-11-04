@@ -39,7 +39,7 @@ CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 #
 # [kernel] archives builds both before the link; this puts them on the link line
 # so ld64 pulls the members in against the driver's unresolved references.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a -Wl,-force_load,{tree}/build/apple-key-store-state/libAppleKeyStoreState.a -Wl,-force_load,{tree}/build/nx769j-keystore/libNX769JKeyStore.a -Wl,-force_load,{tree}/build/ram-block/libRamBlock.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a -Wl,-force_load,{tree}/build/apple-key-store-state/libAppleKeyStoreState.a -Wl,-force_load,{tree}/build/nx769j-keystore/libNX769JKeyStore.a -Wl,-force_load,{tree}/build/ram-block/libRamBlock.a -Wl,-force_load,{tree}/build/nx769j-display/libNX769JDisplay.a"
 
 # Display. GopFramebuffer presents through the UEFI GOP framebuffer that the
 # uefi-nx769j firmware publishes, but its kernel-side provider is a late
@@ -82,8 +82,10 @@ CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="556915A0-5005-4DE5-B3E4-6B489DBB4C1A"
 CONFIG_XNU_OWNER_ROOT_VOLUME_UUID="97A3EB1A-5218-4936-BC85-9574EC2C8CC9"
 
 # Writable /private/var: a packed APFS seed (scripts/build-data-seed.py) travels
-# in the payload, RamBlock serves it from RAM and load_init_program mounts it.
-# It is reset on every boot. The UUID is the seed's own volume, printed by the
+# in the payload and load_init_program mounts it. The seed is a 4 GiB container
+# (under 1 MiB packed): above 2 GiB RamBlock serves it directly from a window at
+# the end of userdata (sheng-data-persist=2) instead of RAM; sheng-data-reset=1
+# starts that window over from the seed on every boot. The UUID is the seed's own volume, printed by the
 # seed builder; rebuild the kernel when the seed is rebuilt. With SOURCE_STORAGE
 # the build script neither links RamBlock nor adds its personality, so the
 # archive is in EXTRA_LD_ARCHIVES and patches/xnu/nx769j-ram-block-personality.patch
@@ -91,4 +93,4 @@ CONFIG_XNU_OWNER_ROOT_VOLUME_UUID="97A3EB1A-5218-4936-BC85-9574EC2C8CC9"
 CONFIG_XNU_NATIVE_RAM_BLOCK=y
 CONFIG_XNU_OWNER_BOOT_MANIFEST=y
 CONFIG_XNU_OWNER_DATA_MOUNT=y
-CONFIG_XNU_OWNER_DATA_VOLUME_UUID="09A4C386-8B5A-46F3-8817-D0B96D69AC3C"
+CONFIG_XNU_OWNER_DATA_VOLUME_UUID="0A4F19E2-EBCE-46AC-B25A-836D8FC6279A"

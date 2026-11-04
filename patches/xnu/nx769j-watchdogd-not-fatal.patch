@@ -1,0 +1,20 @@
+diff -ru a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+--- a/bsd/kern/kern_exit.c	2026-11-03 20:21:14
++++ b/bsd/kern/kern_exit.c	2026-11-03 20:21:14
+@@ -1863,6 +1863,16 @@
+ 		    (unsigned)proc_getcsflags(p), nx769j_desc ? nx769j_desc : "");
+ 	}
+ 
++	/*
++	 * NX769J: launchd spawns watchdogd with a panic-on-crash behaviour. The board
++	 * has no hardware watchdog to keep fed, and watchdogd dies with SIGTRAP before
++	 * it reaches the board's IOWatchdog service, so its exit is reported instead
++	 * of panicking the system. launchd restarts it on its own throttle.
++	 */
++	if (p->p_crash_behavior != 0 && p != initproc && !strncmp(p->p_name, "watchdogd", sizeof(p->p_name))) {
++		printf("NX769J: watchdogd exited 0x%x; not fatal on this board\n", rv);
++		p->p_crash_behavior = 0;
++	}
+ 	if (p->p_crash_behavior != 0 || p == initproc) {
+ 		proc_handle_critical_exit(p, rv);
+ 	}

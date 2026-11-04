@@ -1,0 +1,16 @@
+diff -ru a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+--- a/iokit/KernelConfigTables.cpp	2026-11-03 20:15:23
++++ b/iokit/KernelConfigTables.cpp	2026-11-03 20:15:23
+@@ -90,6 +90,12 @@
+     "     'IOProviderClass' = IOPlatformDevice;"
+     "     'IONameMatch'     = 'nx769j,display';"
+     "   }"
++    /* watchdogd exits, and so panics the system, without an IOWatchdog service (package/display/SweetWatchdog.cpp). */
++    "   ,{"
++    "     'IOClass'         = IOWatchdog;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = IOWatchdog;"
++    "   }"
+ #endif
+ /* NX769J links RamBlock through EXTRA_LD_ARCHIVES; with SOURCE_STORAGE the build passes no XNU_NATIVE_RAM_BLOCK here. */
+ #if (defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK) || defined(XNU_NATIVE_UFS)

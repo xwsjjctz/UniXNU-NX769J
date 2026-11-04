@@ -1,0 +1,67 @@
+diff -ru a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+--- a/osfmk/arm64/sleh.c	2026-11-03 20:33:06
++++ b/osfmk/arm64/sleh.c	2026-11-03 20:33:06
+@@ -1060,7 +1060,53 @@
+ 	__builtin_unreachable();
+ }
+ 
++/*
++ * NX769J: a user brk is how SpringBoard and other daemons die (SIGTRAP), and
++ * the crash reports never reach the panel. Print where it happened: the pc,
++ * lr, a short frame-pointer walk and the shared cache slide, so the addresses
++ * can be resolved against the OS's dyld cache on the host.
++ */
++#include <vm/vm_shared_region.h>
++extern void proc_selfname(char *, int);
++extern int proc_selfpid(void);
+ static void
++nx769j_user_brk(arm_saved_state_t *state, uint32_t esr)
++{
++	static uint32_t reported;
++	char name[32] = "";
++	proc_selfname(name, sizeof(name));
++	if (!strncmp(name, "watchdogd", sizeof(name)) || !strncmp(name, "CommCenter", sizeof(name)) || reported >= 24) {
++		return;
++	}
++	reported++;
++	uint32_t slide = 0;
++	vm_shared_region_t region = vm_shared_region_get(current_task());
++	if (region) {
++		slide = region->sr_slide;
++		vm_shared_region_deallocate(region);
++	}
++	uint64_t frames[6] = {0, 0, 0, 0, 0, 0};
++	uint64_t fp = get_saved_state_fp(state);
++	for (int i = 0; i < 6 && fp && !(fp & 7); i++) {
++		uint64_t pair[2];
++		if (copyin((user_addr_t)fp, pair, sizeof(pair))) {
++			break;
++		}
++		frames[i] = pair[1];
++		fp = pair[0];
++	}
++	printf("NX769J brk %s[%d] esr 0x%x slide 0x%x pc 0x%llx lr 0x%llx x0 0x%llx x1 0x%llx\n", name, proc_selfpid(), esr, slide,
++	    get_saved_state_pc(state), get_saved_state_lr(state), get_saved_state_reg(state, 0), get_saved_state_reg(state, 1));
++	printf("NX769J brk   fr 0x%llx 0x%llx 0x%llx 0x%llx 0x%llx 0x%llx\n", frames[0], frames[1], frames[2], frames[3], frames[4], frames[5]);
++	/* The crash text: FrontBoard and libdispatch leave the UTF8String of their failure message in x0 at the brk. */
++	char message[200];
++	size_t copied = 0;
++	if (!copyinstr((user_addr_t)get_saved_state_reg(state, 0), message, sizeof(message), &copied) && copied > 1) {
++		printf("NX769J brk   msg %s\n", message);
++	}
++}
++
++static void
+ handle_breakpoint(arm_saved_state_t *state, uint32_t esr __unused)
+ {
+ 	exception_type_t           exception = EXC_BREAKPOINT;
+@@ -1068,6 +1108,9 @@
+ 	mach_msg_type_number_t     numcodes  = 2;
+ 
+ 	boot_progress_user_breakpoint(state, esr);
++	if (PSR64_IS_USER(get_saved_state_cpsr(state))) {
++		nx769j_user_brk(state, esr);
++	}
+ #if __has_feature(ptrauth_calls)
+ 	if (ESR_EC(esr) == ESR_EC_BRK_AARCH64 &&
+ 	    brk_comment_is_ptrauth(ISS_BRK_COMMENT(esr))) {

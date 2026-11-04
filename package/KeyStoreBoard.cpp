@@ -41,13 +41,18 @@ uint32_t native_aks_lock_state(void) {
 
 void native_aks_opened(void) {
     native_aks_opens = native_aks_opens + 1;
-    IOLog("NX769J AKS: open %u\n", native_aks_opens);
+    if (native_aks_opens == 1) IOLog("NX769J AKS: first open\n");
 }
 
-// Every selector with its answer, so the panel shows what keybagd and the other daemons ask for.
+// Selectors the stand-in refuses, so the panel shows what keybagd and the other daemons miss.
 void native_aks_call(uint32_t selector, int32_t result) {
     native_aks_calls = native_aks_calls + 1;
-    IOLog("NX769J AKS: selector %u -> 0x%x\n", selector, (uint32_t)result);
+    // Once per selector: libaks retries wrap-key (10) every few seconds and would bury the panel.
+    static uint64_t reported[2];
+    if (result && selector < 128 && !(reported[selector / 64] & (1ULL << (selector % 64)))) {
+        reported[selector / 64] |= 1ULL << (selector % 64);
+        IOLog("NX769J AKS: selector %u -> 0x%x (reported once)\n", selector, (uint32_t)result);
+    }
 }
 
 // Called from bsd_init before load_init_program. Returns the IOReturn of the attempt.

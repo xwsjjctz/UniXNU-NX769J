@@ -46,7 +46,7 @@ diff -ru a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
  	proc_transend(p, 0);
  
  bad_notrans:
-+	printf("NX769J exec pid %d %s: %d\n", proc_getpid(p), excpath ? excpath : "?", error);
++	if (error) printf("NX769J exec pid %d %s: %d\n", proc_getpid(p), excpath ? excpath : "?", error);
  	if (imgp->ip_strings) {
  		execargs_free(imgp);
  	}
@@ -59,7 +59,7 @@ diff -ru a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
  	    p->p_exit_reason ? p->p_exit_reason->osr_code : 0);
 +	{
 +		char *nx769j_desc = exit_reason_get_string_desc(p->p_exit_reason);
-+		printf("NX769J exit pid %d %s: status 0x%x reason %u/0x%llx csflags 0x%x %s\n",
++		if (rv || p->p_exit_reason) printf("NX769J exit pid %d %s: status 0x%x reason %u/0x%llx csflags 0x%x %s\n",
 +		    proc_getpid(p), p->p_name, rv,
 +		    p->p_exit_reason ? p->p_exit_reason->osr_namespace : 0,
 +		    p->p_exit_reason ? p->p_exit_reason->osr_code : 0ULL,
@@ -82,7 +82,7 @@ diff -ru a/osfmk/kern/boot_progress.h b/osfmk/kern/boot_progress.h
 +#if defined(KERNEL_PRIVATE) && defined(BSD_KERNEL_PRIVATE)
 +extern int printf(const char *, ...);
 +#define boot_progress_process_stage(pid, name, stage) \
-+	printf("NX769J proc %d %s: %s\n", (int)(pid), (name), (stage))
++	do { if (strnstr((stage), "REFUSED", 64)) printf("NX769J proc %d %s: %s\n", (int)(pid), (name), (stage)); } while (0)
 +#else
  #define boot_progress_process_stage(...) ((void)0)
 +#endif
