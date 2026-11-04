@@ -191,6 +191,13 @@
 # manifest exists on this boot, so it is a fixed SHA-384 of
 # "UniXNU nx769j boot manifest", the length crypto-hash-method declares.
 "boot-manifest-hash" = "0e85ab6bedc8fda6245581102ead004aa77adfe532b118f79447d35705f4c4f782fb5b31bf5711046946f9ecd855b1d1"
+# iBoot publishes the radios' MAC addresses here. lsd waits in MobileGestalt for
+# the Wi-Fi controller's address, and SpringBoard waits for lsd
+# (_LSCopyServerStore), so without it the boot stays on the Apple logo. These are
+# fixed locally administered unicast addresses (02:..), not the phone's hardware
+# addresses; there is no Wi-Fi or Bluetooth driver behind them.
+"mac-address-wifi0" = "024e58373639"
+"mac-address-bluetooth0" = "024e5837363a"
 
 
 ["adt"."chosen"."u32"]

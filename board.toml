@@ -271,7 +271,8 @@ kernel_args = ["-v", "debug=0x8", "native-ufs-probe=10"]
 
 [payload.adt]
 chip_id = "207"
-owned_memory_size = "0x20000000"
+# 3 GiB, the iPhone X RAM size, out of the High RAM region of the firmware map.
+owned_memory_size = "0xC0000000"
 # The APFS volume UUID inside the OS window. The UFS block class publishes the
 # window, the partition scheme publishes the volume and XNU matches it. This one
 # is read out of the OS window's own volume superblock by

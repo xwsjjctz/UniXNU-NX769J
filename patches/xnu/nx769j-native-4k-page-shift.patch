@@ -1,0 +1,42 @@
+Keep 4K kernel pages when more than 1 GiB is handed to XNU.
+
+arm_init.c includes apple_arm64_common.h, which defines
+APPLE_ARM64_ARCH_FAMILY, so the native-4k-user-abi guard never fired there and
+the kernel picked 16K pages for any memSize above 1 GiB. pmap then panicked in
+write_pte_fast ("PTE write is unaligned") on the first user mapping.
+
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -47,6 +47,14 @@
+ #if HIBERNATION
+ #include <machine/pal_hibernate.h>
+ #endif /* HIBERNATION */
++/*
++ * Decide the native 4K page size before apple_arm64_common.h is included:
++ * that header defines APPLE_ARM64_ARCH_FAMILY for every arm64 build, which
++ * would send a non-Apple board down the 16K branch once memSize > 1 GiB.
++ */
++#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++#define XNU_NATIVE_4K_PAGES 1
++#endif
+ /* ARM64_TODO unify boot.h */
+ #if __arm64__
+ #include <pexpert/arm64/apple_arm64_common.h>
+@@ -394,7 +402,7 @@
+ 
+ 	{
+ 		/* Native non-Apple 4K builds expose the hardware page size at any RAM size. */
+-#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++#if XNU_NATIVE_4K_PAGES
+ 		PAGE_SHIFT_CONST = ARM_PGSHIFT;
+ #else
+ 		/*
+@@ -417,7 +425,7 @@
+ 
+ #endif
+ 
+-#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
++#if XNU_NATIVE_4K_PAGES
+ 		page_shift_user32 = ARM_PGSHIFT;
+ #else
+ 		/* 32-bit apps always see 16KB page size */

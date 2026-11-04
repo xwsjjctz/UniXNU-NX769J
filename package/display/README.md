@@ -26,7 +26,7 @@ houji authors before this repository is published.
   the GOP framebuffer. iOS renders the iPhone X canvas (1125x2436) centred on
   the 1116x2480 panel; `nx769j_canvas=native` uses the panel size instead.
   AppleCLCD publishes canvas-width and canvas-height on its nub.
-- DisplayBoard.cpp (new): the console mute flag and the NativeAdreno hooks the
+- DisplayBoard.cpp (new): the NativeAdreno hooks the
   houji sources expect; there is no GPU, so every frame is a CPU copy.
 
 The screen scale comes from `/chosen/display-scale` in the OS profile, not from
