@@ -1,7 +1,7 @@
 [Defines]
   INF_VERSION                    = 0x00010005
   BASE_NAME                      = ConfigurationMapLib
-  FILE_GUID                      = 4E4BB721-6B8C-4C14-A304-2A8F2389FAA6
+  FILE_GUID                      = D7DDE228-62E4-43E3-B5A1-AB29FB9B0A35
   MODULE_TYPE                    = BASE
   VERSION_STRING                 = 1.0
   LIBRARY_CLASS                  = ConfigurationMapLib

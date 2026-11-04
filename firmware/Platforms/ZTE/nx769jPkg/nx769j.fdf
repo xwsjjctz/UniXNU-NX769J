@@ -1,24 +1,22 @@
-##
+## @file
+#
 #  Copyright (c) 2018, Linaro Limited. All rights reserved.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
-##
 #
-#  nubia RedMagic 9 series (NX769J).
-#
-#  Derived from Platforms/ZTE/nx729jPkg/nx729j.fdf in UniXNU/uefi-sheng: every
-#  nx729j identifier becomes nx769j, and the UniXNU boot chain is added to
-#  FV.FvMain. Nothing else differs — the FD layout is the Mu-Silicium standard
-#  and is shared by every board.
-#
-#  The commented-out DeviceTreeBlob block is left commented. This port appends
-#  the firmware DTB to the boot image's kernel field (boot_image_kernel
-#  .append_dtb = true) instead of embedding it in the firmware volume.
 ##
 
 ################################################################################
 #
 # FD Section
+# The [FD] Section is made up of the definition statements and a
+# description of what goes into  the Flash Device Image.  Each FD section
+# defines one flash "device" image.  A flash device image may be one of
+# the following: Removable media bootable image (like a boot floppy
+# image,) an Option ROM image (that would be "flashed" into an add-in
+# card,) a System "Flash"  image (that would be burned into a system's
+# flash) or an Update ("Capsule") image that will be used to update and
+# existing system flash.
 #
 ################################################################################
 
@@ -33,8 +31,17 @@ NumBlocks     = $(FD_BLOCKS)
 
 ################################################################################
 #
-# FD Region layout. Regions must be defined in ascending order and may not
-# overlap: Offset|Size, or PcdOffsetCName|PcdSizeCName, then RegionType.
+# Following are lists of FD Region layout which correspond to the locations of different
+# images within the flash device.
+#
+# Regions must be defined in ascending order and may not overlap.
+#
+# A Layout Region start with a eight digit hex offset (leading "0x" required) followed by
+# the pipe "|" character, followed by the size of the region, also in hex with the leading
+# "0x" characters. Like:
+# Offset|Size
+# PcdOffsetCName|PcdSizeCName
+# RegionType <FV, DATA, or FILE>
 #
 ################################################################################
 
@@ -46,13 +53,18 @@ FV = FVMAIN_COMPACT
 #
 # FV Section
 #
+# [FV] section is used to define what components or modules are placed within a flash
+# device file.  This section also defines order the components and modules are positioned
+# within the image.  The [FV] section consists of define statements, set statements and
+# module statements.
+#
 ################################################################################
 
 [FV.FvMain]
 FvNameGuid         = CD8D4C84-20AD-4073-8A28-3400FAE05941
 BlockSize          = 0x1000
 NumBlocks          = 0        # This FV gets compressed so make it just big enough
-FvAlignment        = 8
+FvAlignment        = 8        # FV alignment and FV attributes setting.
 ERASE_POLARITY     = 1
 MEMORY_MAPPED      = TRUE
 STICKY_WRITE       = TRUE
@@ -71,42 +83,7 @@ READ_LOCK_STATUS   = TRUE
 
   !include Include/APRIORI.inc
   !include Include/DXE.inc
-  !include Include/RAW.inc
-
-  # UniXNU boot chain. Embedded here rather than loaded from the payload,
-  # because the payload is what UniXNURamDiskDxe has to discover.
-  INF UniXNUPkg/Application/UniXNU/UniXNU.inf
-  INF UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe.inf
-  INF UniXNUPkg/Driver/UniXNURamDiskDxe/UniXNURamDiskDxe.inf
-  INF DarwinBootPkg/Driver/DarwinBoot.inf
-
-  # The firmware log exporter. Embedded like the boot chain, because it is what
-  # captures the firmware log before the kernel handoff.
-  INF UniXNUPkg/Driver/AdvancedLogDxe/AdvancedLogDxe.inf
-
-  # RAM Manager
-  INF SiliciumPkg/Drivers/RamManagerDxe/RamManagerDxe.inf
-
-  # SmBios
-  INF MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
-  INF SiliciumPkg/Drivers/SmBiosTableDxe/SmBiosTableDxe.inf
-
-  # ACPI
-  INF MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf
-  INF MdeModulePkg/Universal/Acpi/AcpiPlatformDxe/AcpiPlatformDxe.inf
-  INF RuleOverride = ACPITABLE nx769j/AcpiTables.inf
-
-  # IORT DT
-  INF QcomPkg/Drivers/IortDtDxe/IortDtDxe.inf
-
-  # Device Tree
-  #INF EmbeddedPkg/Drivers/DtPlatformDxe/DtPlatformDxe.inf
-  #FILE FREEFORM = 25462CDA-221F-47DF-AC1D-259CFAA4E326 {
-  #  SECTION RAW = nx769jPkg/FdtBlob/sm8650-zte-nx769j.dtb
-  #  SECTION UI = "DeviceTreeBlob"
-  #}
-
-  !include QcomPkg/Extra.fdf.inc
+  !include Include/RAM.inc
 
 [FV.FVMAIN_COMPACT]
 FvAlignment        = 8

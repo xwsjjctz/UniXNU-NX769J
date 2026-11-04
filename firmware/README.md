@@ -25,15 +25,30 @@ git submodule update --init --depth 1 -- \
 
 Everything the package adds is here, so `cp -R firmware/* .` is the whole step.
 
+`Platforms/ZTE/nx769jPkg` is the minimal package that boots this phone to the
+iOS lock screen. It is not the vendor-DXE package this directory held before
+(still in Git history at `f180541`): that one stops in the vendor drivers with
+"CPU_Vectors region not present in cfg file". The minimal package starts from
+`Platforms/Xiaomi/houjiPkg` of the houji port (Xiaomi 14, the same SM8650) and
+keeps only what UniXNU needs: core DXE, the simple framebuffer, the USB keyboard
+stack, the vendor SPMI and PMIC drivers, DarwinBoot and UniXNUDxe.
+
 | Staged path | Origin |
 | --- | --- |
 | `Resources/Configs/nx769j.toml` | derived from `nx729j.toml`, `header_version` 4 |
-| `Platforms/ZTE/nx769jPkg/nx769j.dsc` | derived from `nx729jPkg/nx729j.dsc` |
-| `Platforms/ZTE/nx769jPkg/nx769j.fdf` | derived from `nx729jPkg/nx729j.fdf` |
-| `Platforms/ZTE/nx769jPkg/{nx769j.dec,DeviceBuild.py}` | `nx729jPkg`'s, renamed |
-| `Platforms/ZTE/nx769jPkg/Include/{APRIORI,DXE,RAW}.inc` | `nx729jPkg/Include/`'s, with the `Binaries/nx729j` paths renamed to `Binaries/nx769j` |
-| `Platforms/ZTE/nx769jPkg/Library/MemoryMapLib/` | **this board's map**, rebuilt from the firmware device tree |
-| `Platforms/ZTE/nx769jPkg/Library/ConfigurationMapLib/` | `nx729jPkg/Library/`'s, renamed |
+| `Platforms/ZTE/nx769jPkg/{nx769j.dsc,nx769j.fdf,nx769j.dec}` | houji's `houji.*`, renamed, `LanaiPkg`, `SOC_TYPE = 2` |
+| `Platforms/ZTE/nx769jPkg/Include/{APRIORI,DXE,RAM}.inc` | houji's, cut down; `SPMIDxe` and `PmicDxeLa` from `Binaries/nx769j` |
+| `Platforms/ZTE/nx769jPkg/Include/{Library,Protocol}/HoujiRootRAM*.h` | houji's, unchanged |
+| `Platforms/ZTE/nx769jPkg/Drivers/NoCapsuleRuntimeDxe/` | houji's, unchanged |
+| `Platforms/ZTE/nx769jPkg/Library/MemoryMapLib/` | **this board's map** (see below) |
+| `Platforms/ZTE/nx769jPkg/Library/ConfigurationMapLib/` | houji's, renamed |
+
+The houji files carry no license header and houji's `COPYING.md` says its
+per-file licensing has not been audited, as for `package/display/`.
+
+`scripts/check-nx769j-firmware.py` was written for the vendor-DXE package and
+reports problems that do not apply to this one; build with
+`./unixnu build firmware --skip-preflight`.
 
 ## Not staged, and why
 
@@ -52,35 +67,13 @@ before EDK II. With both present it reports the tree as consistent with
 
 ## The memory map
 
-`MemoryMapLib.c` is this board's map, rebuilt from the reservation list in
-`vendor_boot.img`'s device tree rather than carried over from `nx729jPkg`. All
-36 fixed-address reservations have a descriptor named after their node, and the
-regions UEFI lays out for itself sit in the free band the board actually has.
-
-The full reservation list comes from `vendor_boot.img`, whose `dtb` field holds
-six device trees; four are Pineapple variants with byte-identical reservation
-sets, and [`scripts/extract-firmware-dtb.py`](../scripts/extract-firmware-dtb.py)
-prints all of them. The list is 49 nodes, 36 at fixed addresses, and is in
-[`device-inputs.md`](../device-inputs.md#fw-dtb).
-
-It is checked rather than reviewed:
-
-```sh
-python3 scripts/check-memory-map.py --dtb Resources/DTBs/nx769j.dtb
-# check-memory-map: 64 descriptors, 37 fixed reservations, 37 covering one, 0 unexplained
-```
-
-37 rather than 36 because `board.toml [[bootimg.dtb_node]]` adds the contiguous
-splash region to the boot image's device tree, and the script reads that table
-too. The comparison refuses an uncovered reservation, two descriptors fighting
-over one range, a descriptor covering nothing that is not a UEFI region, and any
-DDR descriptor reaching outside DRAM; `scripts/test_check_memory_map.py` covers
-each of those.
-
-A map that reserves the wrong ranges lets the firmware write over what the
-bootloader or TrustZone owns, which is why this is a gate and not a note. See
-[`docs/UEFI-FIRMWARE.md`](../docs/UEFI-FIRMWARE.md) for the derivation and for
-what is still open.
+`MemoryMapLib.c` keeps the UEFI regions under 4 GiB, one conventional
+`DXE_Heap` run at `0xA8000000`, the device-tree reservations, and one RAM bank
+above 4 GiB: `High_RAM`, 4 GiB at `0x8C0000000`. SM8650 has no RAM at
+`0x100000000`; describing that address is what raised the synchronous external
+abort (FAR `0x1001D0000`) earlier. `0x8C0000000` is inside the bank both the 12
+and the 16 GiB units have, and the houji port uses the same range. DarwinBoot
+takes `board.toml`'s `owned_memory_size` (3 GiB) for XNU out of it.
 
 ## The one line that is easy to get wrong
 
