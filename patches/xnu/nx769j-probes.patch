@@ -1,0 +1,16 @@
+Run the NX769J bring-up probes and repeat their results.
+
+The heartbeat prints the secondary CPU state (package/cpu/SmpReport.cpp) every
+15 seconds so it stays on the screen.
+
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1363,6 +1363,8 @@
+ 		absolutetime_to_nanoseconds(mach_absolute_time(), &seconds);
+ 		static int nx769j_last_nprocs = -1;
+ 		printf("NX769J alive %llus nprocs %d\n", seconds / NSEC_PER_SEC, nprocs);
++		extern void nx769j_smp_report(void);
++		nx769j_smp_report();
+ 		if (nprocs <= 2 && nprocs == nx769j_last_nprocs) {
+ 			nx769j_sample_launchd();
+ 		}

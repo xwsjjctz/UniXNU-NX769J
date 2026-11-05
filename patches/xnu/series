@@ -76,3 +76,4 @@ nx769j-watchdogd-not-fatal.patch
 nx769j-user-brk-report.patch
 nx769j-native-4k-page-shift.patch
 nx769j-console-mute.patch
+nx769j-probes.patch
