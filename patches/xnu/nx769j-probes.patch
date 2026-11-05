@@ -1,16 +1,20 @@
 Run the NX769J bring-up probes and repeat their results.
 
-bsd_init starts the touch driver, nx769j_touch_start() (package/touch), after
-the keystore is published; nx769j-touch=0 skips it. The heartbeat prints the
-secondary CPU state (package/cpu/SmpReport.cpp) and the touch status lines
-every 15 seconds so they stay on the screen.
+After the keystore is published, bsd_init starts the CPU frequency governor,
+nx769j_dvfs_start() (package/cpu/CpuDvfs.cpp; nx769j-dvfs=0 only reports),
+and the touch driver, nx769j_touch_start() (package/touch; nx769j-touch=0
+skips it). The heartbeat prints the secondary CPU state, the frequency domains
+and the touch status lines every 15 seconds so they stay on the screen.
 
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
-@@ -1281,6 +1281,11 @@
+@@ -1281,6 +1281,14 @@
  		printf("NX769J keystore publish: 0x%x\n", nx769j_keystore_publish());
  	}
  	{
++		/* CPU frequency governor (package/cpu/CpuDvfs.cpp, nx769j-dvfs=0 only reports). */
++		extern void nx769j_dvfs_start(void);
++		nx769j_dvfs_start();
 +		/* Touch screen (package/touch, off with nx769j-touch=0). */
 +		extern void nx769j_touch_start(void);
 +		nx769j_touch_start();
@@ -19,12 +23,14 @@ every 15 seconds so they stay on the screen.
  		extern void nx769j_heartbeat(void *, wait_result_t);
  		thread_t nx769j_thread;
  		if (kernel_thread_start(nx769j_heartbeat, NULL, &nx769j_thread) == KERN_SUCCESS) {
-@@ -1363,6 +1368,10 @@
+@@ -1363,6 +1371,12 @@
  		absolutetime_to_nanoseconds(mach_absolute_time(), &seconds);
  		static int nx769j_last_nprocs = -1;
  		printf("NX769J alive %llus nprocs %d\n", seconds / NSEC_PER_SEC, nprocs);
 +		extern void nx769j_smp_report(void);
 +		nx769j_smp_report();
++		extern void nx769j_dvfs_report(void);
++		nx769j_dvfs_report();
 +		extern void nx769j_touch_report(void);
 +		nx769j_touch_report();
  		if (nprocs <= 2 && nprocs == nx769j_last_nprocs) {

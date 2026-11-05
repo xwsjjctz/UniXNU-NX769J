@@ -22,6 +22,7 @@ extern "C" {
 kern_return_t kernel_thread_start(thread_continue_t continuation, void *parameter, thread_t *new_thread);
 void thread_deallocate(thread_t thread);
 void sweet_hid_touch(int finger, int down, int x, int y);
+void nx769j_dvfs_touch(void);
 void nx769j_touch_start(void);
 void nx769j_touch_report(void);
 }
@@ -170,6 +171,7 @@ void handle_event(uint16_t &down, int (&lastX)[kMaxContacts], int (&lastY)[kMaxC
 				gContacts++;
 				if (!(down & (1u << id))) {
 					gDowns++;
+					nx769j_dvfs_touch();
 				}
 				sweet_hid_touch((int)id, 1, x, y);
 			}
