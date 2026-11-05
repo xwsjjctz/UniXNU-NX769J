@@ -34,9 +34,13 @@ kit = "nx769j"
 [components]
 # Arrays replace the inherited arrays from the ARM64, SoC and OS profiles, so
 # this list is the complete selection. Deliberately omitted:
-#   Adreno740, AdrenoMetal, Sm8550Platform, AdrenoPM4, AdrenoFirmware,
-#   ArmSmmu4K  - the catalog GPU stack targets Adreno 740 on SM8550. NX769J has
-#                Adreno 750 ("qcom,adreno-43051401", "qcom,adreno-gmu-750.1").
+#   Adreno740, Sm8550Platform, AdrenoFirmware, AdrenoPM4, ArmSmmu4K - selecting
+#                them asks for the A740 component archives. The Adreno 750
+#                ("qcom,adreno-43051401", gen7_9_1) bring-up compiles the sources
+#                it needs straight from the catalog in scripts/build-nx769j-gpu.py;
+#                Linux runs A740 and A750 through the same GMU and HFI paths.
+#   AdrenoMetal  - the Metal frontend targets the iPadOS 17 GPU ABI; this board
+#                runs iOS 16.5.
 #   ShengHidInput, ShengNovatekTouch, QcomGeniSpi - the touch driver is for the
 #                Novatek NT36532E. NX769J uses a Goodix 9916R.
 #   Ath12kWifi   - declares os_abi "nw_abi platform interface", which does not
@@ -100,6 +104,9 @@ archives = [
   "build-nx769j-input.py",
   # Bring-up probes: the SMP heartbeat line (package/cpu).
   "build-nx769j-probes.py",
+  # Adreno 750 bring-up (package/gpu, boot-arg nx769j-gpu=<mode>): SM8650 clocks and GDSC, GMU SMMU context, GMU cold
+  # start and HFI, GX power. Needs .cache/gpu-firmware and .cache/adreno-source (scripts/data/nx769j-adreno-inputs.json).
+  "build-nx769j-gpu.py",
   "build-storage-bindings.py",
 ]
 config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "os:configs/ios.config"]
