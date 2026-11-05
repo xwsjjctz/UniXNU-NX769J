@@ -1,0 +1,27 @@
+Match the built-in HID event services (package/hid/SweetHID.cpp).
+
+SweetHIDButtons and SweetHIDTouch publish HIDServiceSupport services that
+backboardd opens; the Goodix driver (package/touch) feeds the touch one. They
+replace com.apple.iokit.IOHIDFamily, which the OS profile leaves out.
+
+diff -ru a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+--- a/iokit/KernelConfigTables.cpp	2026-11-05 19:00:00
++++ b/iokit/KernelConfigTables.cpp	2026-11-05 19:00:00
+@@ -96,6 +96,17 @@
+     "     'IOProviderClass' = IOResources;"
+     "     'IOMatchCategory' = IOWatchdog;"
+     "   }"
++    /* HID event services in place of IOHIDFamily (package/hid/SweetHID.cpp). */
++    "   ,{"
++    "     'IOClass'         = SweetHIDButtons;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = SweetHIDButtons;"
++    "   }"
++    "   ,{"
++    "     'IOClass'         = SweetHIDTouch;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = SweetHIDTouch;"
++    "   }"
+ #endif
+ /* NX769J links RamBlock through EXTRA_LD_ARCHIVES; with SOURCE_STORAGE the build passes no XNU_NATIVE_RAM_BLOCK here. */
+ #if (defined(XNU_NATIVE_RAM_BLOCK) && XNU_NATIVE_RAM_BLOCK) || defined(XNU_NATIVE_UFS)

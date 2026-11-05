@@ -96,6 +96,8 @@ archives = [
   "build-nx769j-keystore.py",
   # IOSurfaceRoot and AppleCLCD from package/display, in place of the kexts the OS profile leaves out.
   "build-nx769j-display.py",
+  # HID event services and the Goodix touch driver (package/hid, package/touch), in place of IOHIDFamily.
+  "build-nx769j-input.py",
   # Bring-up probes: the SMP heartbeat line (package/cpu).
   "build-nx769j-probes.py",
   "build-storage-bindings.py",

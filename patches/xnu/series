@@ -72,6 +72,7 @@ nx769j-keystore-publish.patch
 nx769j-ram-block-personality.patch
 nx769j-display-personality.patch
 nx769j-watchdog-personality.patch
+nx769j-hid-personality.patch
 nx769j-watchdogd-not-fatal.patch
 nx769j-user-brk-report.patch
 nx769j-native-4k-page-shift.patch

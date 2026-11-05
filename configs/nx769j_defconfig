@@ -39,7 +39,7 @@ CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 #
 # [kernel] archives builds both before the link; this puts them on the link line
 # so ld64 pulls the members in against the driver's unresolved references.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a -Wl,-force_load,{tree}/build/apple-key-store-state/libAppleKeyStoreState.a -Wl,-force_load,{tree}/build/nx769j-keystore/libNX769JKeyStore.a -Wl,-force_load,{tree}/build/ram-block/libRamBlock.a -Wl,-force_load,{tree}/build/nx769j-display/libNX769JDisplay.a -Wl,-force_load,{tree}/build/nx769j-probes/libNX769JProbes.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a -Wl,-force_load,{tree}/build/apple-key-store-state/libAppleKeyStoreState.a -Wl,-force_load,{tree}/build/nx769j-keystore/libNX769JKeyStore.a -Wl,-force_load,{tree}/build/ram-block/libRamBlock.a -Wl,-force_load,{tree}/build/nx769j-display/libNX769JDisplay.a -Wl,-force_load,{tree}/build/nx769j-input/libNX769JInput.a -Wl,-force_load,{tree}/build/nx769j-probes/libNX769JProbes.a"
 
 # Display. GopFramebuffer presents through the UEFI GOP framebuffer that the
 # uefi-nx769j firmware publishes, but its kernel-side provider is a late

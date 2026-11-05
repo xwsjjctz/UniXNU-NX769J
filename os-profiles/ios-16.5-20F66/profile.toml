@@ -104,6 +104,9 @@
 # IOMobileFramebuffer, the way the houji port does, and two classes of one name
 # cannot be loaded. This kernelcache has no driver for the SM8650 display or GPU
 # to bind them to anyway.
+# com.apple.iokit.IOHIDFamily is left out as well: the board builds IOHIDEvent,
+# IOHIDEventService and IOHIDEventServiceUserClient into the kernel (package/hid)
+# for its touch screen, and two classes of one name cannot be loaded.
 # com.apple.driver.AppleARMWatchdogTimer is left out too: it only matches Apple's
 # wdt,s5l8960x block, and its IOWatchdog class would clash with the board's
 # (package/display/SweetWatchdog.cpp), which watchdogd needs to stay up.
@@ -126,7 +129,6 @@
   "com.apple.iokit.IOCECFamily",
   "com.apple.iokit.IOCryptoAcceleratorFamily",
   "com.apple.iokit.IOHDCPFamily",
-  "com.apple.iokit.IOHIDFamily",
   "com.apple.iokit.IOReportFamily",
   "com.apple.iokit.IOSlowAdaptiveClockingFamily",
   "com.apple.iokit.IOStorageFamily",
