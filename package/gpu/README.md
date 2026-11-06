@@ -16,6 +16,8 @@ firmware has none of the vendor clock, RPMh or SCM drivers that houji's handoff 
   | 7 | GMU cold start and HFI startup |
   | 8 | HFI perf vote and OOB GPU_SET (GX on) |
   | 9 | `GpuCommand.cpp`: the GPU SMMU context, SQE, hw_init, ring 0, CP_INIT and one CP_MEM_WRITE |
+  | 10 | `GpuCommand.cpp`: the zap shader through TrustZone, then CP_SET_SECURE_MODE 0 (`nx769j-gpu-zap=0` skips it) |
+  | 11 | `GpuPublish.cpp`: the NativeAdrenoPublish user-client service and the IOAcceleratorES/AGXAccelerator for Metal and Turnip |
 
   It is a port of UniXNU-sheng `package/GpuPowerProbe.cpp` (2d4b58b7, SM8550 / A740). Linux runs both GPUs through the same
   a740-family GMU and HFI code.
@@ -39,5 +41,26 @@ firmware has none of the vendor clock, RPMh or SCM drivers that houji's handoff 
   Adreno740 is copied to `build/nx769j-gpu/adreno740` first and `patches/drivers/Adreno740/*.patch` applied to the copy.
   `gen70900-sqe-size.patch` raises `GpuSqeBytes` to 0x16000: the A750 SQE is 85360 bytes and A740's buffer holds 77824.
 
-The device result is in `docs/DEVICE-EVIDENCE.md` (`gpu1`, `gpu2`, `gpu3`): the GMU runs, GX powers on and the command
-processor executes a memory write. iOS does not use the GPU yet: there is no user-client service or Metal plugin.
+- `GpuCommand.cpp` mode 10 loads the signed zap shader through the SCM PAS calls and leaves CP secure mode off.
+- `GpuPublish.cpp` mode 11 publishes UniXNU's `NativeAdrenoPublish` service and a self-defined `IOAcceleratorES`/`AGXAccelerator`
+  (`MetalPluginName NativeAdrenoMetal`), since this kernelcache has no IOGPUFamily. Turnip and the Metal plugin open it.
+- `GpuKernelStubs.cpp` answers the few sheng/driver symbols this board does not have (GOP hand-off, log export, DCVS) with "not available".
+- `execReport()` prints the live GPU/ring/SMMU state every heartbeat; `nx769j-gpu-nocgc=1` leaves clock gating at reset (a bring-up switch).
+
+The GPU userland (iOS 16 Turnip, the `NativeAdrenoMetal` plugin, `vktest`, `mtltest`) is built on a Mac by
+`scripts/build-nx769j-metal.sh` and packed by `scripts/make-nx769j-gpu-addon.py`; see `third_party/data-a-live`.
+
+## Status and known issues
+
+On the device Turnip enumerates the Adreno 750 and client connections work. **Image clear and compute dispatch render
+correctly** (`vktest` part 3 and part 4, 0 of 4096 words wrong). Two things do not work yet:
+
+- **Graphics draw hangs** (`vktest` part 5). The submit succeeds but the fence never signals: the CP runs the draw and
+  wedges at the colour-cache (CCU) flush in the submit epilogue (`execReport`: `RBBM_STATUS 00800005`, GPU busy, `cp-int` bit 0).
+  Compute does not touch the CCU and completes. This is the blocker for GPU desktop composition, which is Metal render passes.
+  The `hwInit` here matches the sheng A740 reference, so the difference is the A750 (gen7_9_1) CCU/cache behaviour.
+- **Buffer fill/update returns wrong data** (`vktest` part 2): the fence signals but the CPU reads a wrong pattern, a data or
+  cache-coherency problem distinct from the part 5 hang.
+
+Clock gating must stay on: `nx769j-gpu-nocgc=1` makes even the image clear and compute hang. The device results are in
+`docs/DEVICE-EVIDENCE.md` (`gpu1`..`gpu3`, and the `gpu11`..`gpu16` user-path runs). iOS still composes on the CPU.
