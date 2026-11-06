@@ -49,6 +49,11 @@
     "NativeAdrenoMemory.cpp",
     "NativeAdrenoSmmuMemory.cpp",
     "NativeAdrenoSmmuContext.cpp",
-    "NativeAdrenoCpu.cpp"
+    "NativeAdrenoCpu.cpp",
+    "NativeAdrenoGpuContext.cpp",
+    "NativeAdrenoRing.cpp",
+    "NativeAdrenoCpInit.cpp",
+    "NativeAdrenoPwrup.cpp",
+    "NativeAdrenoPreempt.cpp"
   ]
 }

@@ -14,12 +14,15 @@ Generated, as sheng's prepare-sheng-gmu.py and prepare-sheng-gmu-votes.py do for
   NX769JGpuFirmware.c         the three firmware images as const arrays
 
 Compiled with the kernel's own compile records: Sm8550Platform (ShengGmu.c, ShengGmuCommandDb.c), package/gpu
-(ShengGmuVotes.c, GpuPower.cpp), AdrenoFirmware, ArmSmmu4K, AdrenoPM4 and the Adreno740 driver sources the bring-up uses.
+(ShengGmuVotes.c, GpuPower.cpp, GpuCommand.cpp), AdrenoFirmware, ArmSmmu4K, AdrenoPM4 and the Adreno740 driver sources the
+bring-up uses. Adreno740 is copied to build/nx769j-gpu/adreno740 first and patches/drivers/Adreno740/*.patch applied there,
+so the catalog checkout stays unchanged.
 
 Output: build/nx769j-gpu/libNX769JGpu.a, linked by CONFIG_XNU_EXTRA_LD_ARCHIVES.
 """
 import ast
 import hashlib
+import shutil
 import json
 import os
 import re
@@ -287,18 +290,23 @@ def main():
     fw_chip = gmu_source(pins)
     records = votes_source()
     firmware_source()
+    OUT.mkdir(parents=True, exist_ok=True)
     feeds = sorted((UNIXNU / 'out/feeds').glob('UniXNU-sm8550-common-*/kits/Sm8550Platform'))
     if not feeds:
         raise SystemExit('Sm8550Platform feed missing (UniXNU out/feeds)')
     platform = feeds[-1]
     kits = UNIXNU / 'kits'
-    adreno = UNIXNU / 'drivers/Adreno740'
+    adreno = OUT / 'adreno740'
+    shutil.rmtree(adreno, ignore_errors=True)
+    shutil.copytree(UNIXNU / 'drivers/Adreno740', adreno, ignore=shutil.ignore_patterns('.git'))
+    for patch in sorted((DEVICE / 'patches/drivers/Adreno740').glob('*.patch')):
+        subprocess.run(['patch', '-p1', '--forward', '--quiet', '-d', str(adreno), '-i', str(patch)], check=True)
     includes = [GEN, PACKAGE, platform, kits / 'AdrenoFirmware', kits / 'ArmSmmu4K', kits / 'AdrenoPM4', adreno]
     sources = [platform / 'ShengGmu.c', platform / 'ShengGmuCommandDb.c', PACKAGE / 'ShengGmuVotes.c', GEN / 'NX769JGpuFirmware.c']
     sources += [kits / 'AdrenoFirmware' / n for n in ('AdrenoHfi.c', 'AdrenoHfiStartup.c', 'AdrenoHfiVotes.c', 'AdrenoFirmware.c')]
     sources += sorted((kits / 'ArmSmmu4K').glob('ArmSmmu4K*.c')) + [kits / 'AdrenoPM4/AdrenoPM4.c']
     wanted = json.loads((DEVICE / 'scripts/data/nx769j-adreno-inputs.json').read_text())['adreno740_sources']
-    sources += [adreno / n for n in wanted] + [PACKAGE / 'GpuPower.cpp']
+    sources += [adreno / n for n in wanted] + [PACKAGE / 'GpuPower.cpp', PACKAGE / 'GpuCommand.cpp']
     c_record = json.loads(C_RECIPE.read_text().strip().rstrip(','))
     cxx_record = json.loads(CXX_RECIPE.read_text().strip().rstrip(','))
     OUT.mkdir(parents=True, exist_ok=True)

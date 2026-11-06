@@ -13,6 +13,7 @@
 //   7  + GMU cold start: RSC/PDC setup, gmu_gen70900.bin load and readback, CM3 release, firmware and HFI ready,
 //        then the HFI startup messages
 //   8  + HFI GX_BW_PERF_VOTE at the lowest OPP and OOB GPU_SET, which makes the GMU power GX; then RBBM_STATUS
+//   9  + GpuCommand.cpp: the GPU's SMMU context, SQE, hw_init, ring, CP_INIT and one CP_MEM_WRITE with its fence
 //
 // It runs in a thread a few seconds after bsd_init. The lines are printed as they happen and again by the heartbeat
 // (nx769j_gpu_report), so a photo shows the last stage reached.
@@ -41,6 +42,7 @@ void nx769j_gpu_start(void);
 void nx769j_gpu_report(void);
 }
 #include "NativeAdrenoGmuContext.h"
+#include "GpuBridge.h"
 
 // NativeAdrenoMemory::release() asks this sheng kernel hook (iPadOS patch zzzz-sheng-ipados27-bringup) which user maps
 // still hold a page, for a diagnostic only. This kernel has no such hook: report none.
@@ -51,7 +53,7 @@ native_pmap_user_mappings(unsigned int, void **, uint64_t *, char *)
 }
 
 namespace {
-constexpr unsigned kLines = 12, kWidth = 168, kMaxMode = 8;
+constexpr unsigned kLines = 20, kWidth = 168, kMaxMode = 9;
 char gLines[kLines][kWidth];
 unsigned gCount, gMode;
 volatile unsigned gStage;   // last stage started, printed by the heartbeat
@@ -402,7 +404,7 @@ int hfiWait(void *)
 	return 0;
 }
 
-void gpuOn()
+bool gpuOn()
 {
 	ShengGmuIo &io = gColdDevice.io;
 	auto rd32 = [&](unsigned w, uint32_t at) {
@@ -446,6 +448,7 @@ void gpuOn()
 		line("GX off: vote %u/%x perf %u bw %u oob-polls %u gx %x>%x gx-gdscr %08x", voted, error, perf, bw, polls, gxBefore,
 		    gxAfter, gdscr);
 	}
+	return gx;
 }
 
 void worker(void *, wait_result_t)
@@ -472,10 +475,46 @@ void worker(void *, wait_result_t)
 		stage(0xf7);
 		return;
 	}
-	gpuOn();
-	stage(0xf8);
+	if (!gpuOn() || gMode < 9) {
+		stage(0xf8);
+		return;
+	}
+	stage(nx769j_gpu::commandStart() ? 0xfa : 0xf9);
 }
 } // namespace
+
+// Accessors for GpuCommand.cpp, valid after a successful cold start (stage 7).
+namespace nx769j_gpu {
+void report(const char *text) { line("%s", text); }
+void progress(unsigned s) { stage(s); }
+int gpuRead32(void *, uint32_t dword, uint32_t *value)
+{
+	return gColdDevice.io.read32(gColdDevice.io.cookie, ShengGmuGpu, size_t(dword) * 4, value);
+}
+int gpuWrite32(void *, uint32_t dword, uint32_t value)
+{
+	return gColdDevice.io.write32(gColdDevice.io.cookie, ShengGmuGpu, size_t(dword) * 4, value);
+}
+uint32_t gpuRead(uint32_t dword)
+{
+	uint32_t v = 0xdeadbeef;
+	gpuRead32(nullptr, dword, &v);
+	return v;
+}
+void gpuWrite(uint32_t dword, uint32_t value) { gpuWrite32(nullptr, dword, value); }
+void gmuWrite(uint32_t gpuDword, uint32_t value)
+{
+	gColdDevice.io.write32(gColdDevice.io.cookie, ShengGmuCore, kGmuReg(gpuDword), value);
+}
+volatile uint8_t *smmu() { return gSmmuMap ? reinterpret_cast<volatile uint8_t *>(gSmmuMap->getVirtualAddress()) : nullptr; }
+size_t smmuBytes() { return kSmmuWindow; }
+uint64_t nowUs()
+{
+	uint64_t us = 0;
+	coldNow(nullptr, &us);
+	return us;
+}
+} // namespace nx769j_gpu
 
 void
 nx769j_gpu_start(void)
