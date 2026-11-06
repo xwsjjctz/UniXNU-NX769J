@@ -256,7 +256,9 @@ props = [
 
 [payload]
 volume = "NX769JESP"
-size_mib = 64
+# 76 MiB from the GPU addon on (payload --gpu-addon, 12 MiB): the kernel (57 MiB) and the Data seed left 7 MiB of 64. The
+# ramdisk still fits the 96 MiB vendor_boot partition next to its header and DTB.
+size_mib = 76
 loader = "firmware"
 title = "UniXNU"
 # Handoff window passed to the ADT tool, not the installed DRAM size.
