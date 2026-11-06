@@ -14,6 +14,8 @@
 //        then the HFI startup messages
 //   8  + HFI GX_BW_PERF_VOTE at the lowest OPP and OOB GPU_SET, which makes the GMU power GX; then RBBM_STATUS
 //   9  + GpuCommand.cpp: the GPU's SMMU context, SQE, hw_init, ring, CP_INIT and one CP_MEM_WRITE with its fence
+//  10  + GpuCommand.cpp: the zap shader through TrustZone and CP_SET_SECURE_MODE 0 (nx769j-gpu-zap=0 skips it)
+//  11  + GpuPublish.cpp: the NativeAdrenoPublish user-client service and the IOAcceleratorES accelerator for Metal/Turnip
 //
 // It runs in a thread a few seconds after bsd_init. The lines are printed as they happen and again by the heartbeat
 // (nx769j_gpu_report), so a photo shows the last stage reached.
@@ -44,18 +46,11 @@ void nx769j_gpu_report(void);
 #include "NativeAdrenoGmuContext.h"
 #include "GpuBridge.h"
 
-// NativeAdrenoMemory::release() asks this sheng kernel hook (iPadOS patch zzzz-sheng-ipados27-bringup) which user maps
-// still hold a page, for a diagnostic only. This kernel has no such hook: report none.
-extern "C" __attribute__((weak)) unsigned int
-native_pmap_user_mappings(unsigned int, void **, uint64_t *, char *)
-{
-	return 0;
-}
-
 namespace {
-constexpr unsigned kLines = 20, kWidth = 168, kMaxMode = 9;
+constexpr unsigned kLines = 32, kWidth = 168, kMaxMode = 11;
 char gLines[kLines][kWidth];
 unsigned gCount, gMode;
+unsigned gVerified;   // line index of the last mode 9 line once the GPU wrote memory; nx769j-quiet=1 prints from there
 volatile unsigned gStage;   // last stage started, printed by the heartbeat
 
 void line(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -479,13 +474,21 @@ void worker(void *, wait_result_t)
 		stage(0xf8);
 		return;
 	}
-	stage(nx769j_gpu::commandStart() ? 0xfa : 0xf9);
+	unsigned zap = 1;
+	PE_parse_boot_argn("nx769j-gpu-zap", &zap, sizeof(zap));
+	const bool started = nx769j_gpu::commandStart(gMode >= 10 && zap);
+	if (!started || gMode < 11) {
+		stage(started ? 0xfa : 0xf9);
+		return;
+	}
+	stage(nx769j_gpu::publish() ? 0xfc : 0xfb);
 }
 } // namespace
 
 // Accessors for GpuCommand.cpp, valid after a successful cold start (stage 7).
 namespace nx769j_gpu {
 void report(const char *text) { line("%s", text); }
+void markVerified() { gVerified = gCount ? gCount : 1; }
 void progress(unsigned s) { stage(s); }
 int gpuRead32(void *, uint32_t dword, uint32_t *value)
 {
@@ -539,8 +542,18 @@ nx769j_gpu_report(void)
 	if (!gMode) {
 		return;
 	}
+	// nx769j-quiet=1: once mode 9 has completed (verified on the device), repeat only its last line and what follows.
+	static int quiet = -1;
+	if (quiet < 0) {
+		quiet = 0;
+		PE_parse_boot_argn("nx769j-quiet", &quiet, sizeof(quiet));
+	}
 	printf("NX769J GPU mode %u stage %x\n", gMode, gStage);
-	for (unsigned i = 0; i < gCount; i++) {
+	if (gStage == 0xfc) {
+		nx769j_gpu::publishReport();
+		nx769j_gpu::execReport();
+	}
+	for (unsigned i = quiet && gVerified ? gVerified - 1 : 0; i < gCount; i++) {
 		printf("NX769J GPU %s\n", gLines[i]);
 	}
 }

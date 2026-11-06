@@ -14,7 +14,7 @@ Generated, as sheng's prepare-sheng-gmu.py and prepare-sheng-gmu-votes.py do for
   NX769JGpuFirmware.c         the three firmware images as const arrays
 
 Compiled with the kernel's own compile records: Sm8550Platform (ShengGmu.c, ShengGmuCommandDb.c), package/gpu
-(ShengGmuVotes.c, GpuPower.cpp, GpuCommand.cpp), AdrenoFirmware, ArmSmmu4K, AdrenoPM4 and the Adreno740 driver sources the
+(ShengGmuVotes.c, GpuPower.cpp, GpuCommand.cpp, GpuPublish.cpp), AdrenoFirmware, ArmSmmu4K, AdrenoPM4 and the Adreno740 driver sources the
 bring-up uses. Adreno740 is copied to build/nx769j-gpu/adreno740 first and patches/drivers/Adreno740/*.patch applied there,
 so the catalog checkout stays unchanged.
 
@@ -306,7 +306,7 @@ def main():
     sources += [kits / 'AdrenoFirmware' / n for n in ('AdrenoHfi.c', 'AdrenoHfiStartup.c', 'AdrenoHfiVotes.c', 'AdrenoFirmware.c')]
     sources += sorted((kits / 'ArmSmmu4K').glob('ArmSmmu4K*.c')) + [kits / 'AdrenoPM4/AdrenoPM4.c']
     wanted = json.loads((DEVICE / 'scripts/data/nx769j-adreno-inputs.json').read_text())['adreno740_sources']
-    sources += [adreno / n for n in wanted] + [PACKAGE / 'GpuPower.cpp', PACKAGE / 'GpuCommand.cpp']
+    sources += [adreno / n for n in wanted] + [PACKAGE / 'GpuPower.cpp', PACKAGE / 'GpuCommand.cpp', PACKAGE / 'GpuPublish.cpp', PACKAGE / 'GpuKernelStubs.cpp']
     c_record = json.loads(C_RECIPE.read_text().strip().rstrip(','))
     cxx_record = json.loads(CXX_RECIPE.read_text().strip().rstrip(','))
     OUT.mkdir(parents=True, exist_ok=True)

@@ -54,6 +54,10 @@
     "NativeAdrenoRing.cpp",
     "NativeAdrenoCpInit.cpp",
     "NativeAdrenoPwrup.cpp",
-    "NativeAdrenoPreempt.cpp"
+    "NativeAdrenoPreempt.cpp",
+    "NativeAdrenoPublish.cpp",
+    "NativeAdrenoUserClient.cpp",
+    "NativeAdrenoSubmit.cpp",
+    "NativeAdrenoTimer.cpp"
   ]
 }
