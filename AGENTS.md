@@ -50,10 +50,10 @@ statements and ordinary punctuation.
   before a build resolves. Its prelink ABI was read out of the 16.5 kernelcache
   by `scripts/extract-ipsw-pins.py`; never copy those values from another
   profile, they are version bound.
-- The whole patch order targets `xnu-10063.141.1` and does not apply to
-  `xnu-8796` yet. The OS series is deliberately empty for that reason; a
-  version-mismatched patch path makes `unixnu status` abort with
-  `patch missing`.
+- The shared ARM64, SoC and OS series target `xnu-10063.141.1` and do not
+  apply to `xnu-8796`. `board.toml` selects only the rebased device series,
+  `patches/xnu/series`; a version-mismatched patch path makes `unixnu status`
+  abort with `patch missing`.
 - The SoC source is `UniXNU-sm8550-common`. Its register map matches SM8650 for
   every resource this port drives, but its CPU core names and Adreno generation
   do not. Keep the per-node overrides in `dts/nx769j.dts` and
@@ -65,8 +65,9 @@ statements and ordinary punctuation.
   defconfig is applied last and turns it off. Do not drop that line.
 - The boot image is header version 4. The Android 14 ABL rejects a version 0
   image.
-- Nothing in this port is device verified. Do not raise an area's status without
-  the evidence its level requires.
+- Raise an area's status only with the evidence its level requires. A
+  `device-verified` area cites a row of `docs/DEVICE-EVIDENCE.md` and the
+  commit whose code ran.
 
 ## Porting record
 

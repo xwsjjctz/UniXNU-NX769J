@@ -25,11 +25,12 @@ firmware and partition policy. Shared code lives in
 
 ## Status
 
-The board description, component selection, device tree and kernel
-configuration are complete and sourced. **Every image the port needs now
-builds**: the XNU kernel, the UEFI firmware volume, the payload, the userdata
-root image and the boot image. Hardware bring-up has not run, so there is no
-device verification and nothing here has been observed booting.
+iOS 16.5 boots on the device to the lock screen and the home screen. All eight
+CPUs run with a load-following frequency governor, the Goodix touch screen
+drives the UI, and the Adreno 750 GMU, GX and command processor start in the
+kernel. iOS still renders on the CPU. `porting.toml` states the scope, evidence
+and next step of each area, and `docs/DEVICE-EVIDENCE.md` lists every device
+run.
 
 | Milestone | State |
 | --- | --- |
@@ -38,8 +39,15 @@ device verification and nothing here has been observed booting.
 | Prelink produces `kernel/kernel.macho` | **done** — experimental candidate, not runtime-qualified |
 | `build package` produces the UniXNU UEFI drivers | **done** |
 | UEFI firmware package | **built** — `SILICIUM_UEFI.fd`, exactly `0x300000` bytes; see [`docs/UEFI-FIRMWARE.md`](docs/UEFI-FIRMWARE.md) |
-| Firmware image, payload, boot image | **built** — see [`docs/FLASHING.md`](docs/FLASHING.md) |
-| Boot on hardware | not attempted |
+| Firmware image, payload, boot image | **built**; the payload is written to `vendor_boot_a` over EDL |
+| Boot on hardware | **iOS 16.5 lock screen and home screen** |
+| Eight CPUs and the EPSS governor | **device verified** |
+| Touch (Goodix GT9916R) | **device verified** |
+| GPU (Adreno 750) | GMU, GX and CP_INIT device verified; no Metal path |
+
+[`docs/FLASHING.md`](docs/FLASHING.md) describes the earlier fastboot flow. The
+images that reach iOS carry the payload in `vendor_boot_a` and are written over
+EDL; `docs/DEVICE-EVIDENCE.md` records the boot arguments of each run.
 
 `./unixnu build kernel` runs end to end against the iOS 16.5 restore image:
 eleven archive builders, the link, and prelink. The kernel is an **experimental
@@ -55,7 +63,7 @@ build on Linux with CLANGPDB.
 | Image | Bytes | What it is |
 | --- | --- | --- |
 | `SILICIUM_UEFI.fd` | 3145728 | the UEFI firmware volume, in the `uefi-nx769j` checkout |
-| `payload/payload.img` | 218103808 | the FAT payload: menu config, kernel, ADT, trust cache, Data seed |
+| `payload/payload.img` | 67108864 | the FAT payload (`[payload] size_mib = 64`): menu config, kernel, ADT, trust cache, Data seed |
 | `userdata/userdata-root.img` | 8357150720 | the OS and SystemOS windows |
 | `boot/boot.img` | 220344320 | BootShim + FD + payload + firmware DTB, for `fastboot boot` |
 
@@ -74,8 +82,8 @@ neither is redistributable. Each has an extraction script and a recorded hash.
 Two more are read out of what the build already produces: the root volume UUID
 comes from `userdata-root.img` via
 [`scripts/extract-root-volume-uuid.py`](device-inputs.md#root-volume), and the
-root windows' verified-root policy bundle is still to be signed — see
-`porting.toml`.
+root windows' verified-root policies are signed with the owner key by
+`scripts/make-root-policies.py`.
 
 Every area states its own scope and next step in [`porting.toml`](porting.toml).
 
