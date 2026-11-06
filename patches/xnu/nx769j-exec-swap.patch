@@ -1,0 +1,236 @@
+Run a replacement wherever one path is executed (boot-arg nx769j-execswap=<path>=<replacement>[,<path>=<replacement>]).
+
+exec_activate_image saves the copied-in path, then, when it equals <path> exactly, saves <replacement> in its place before the
+lookup. With the boot-arg set, every exec below /private/var/ngpu/bin/ is marked IMGPF_NX769J_EXECSWAP. For a marked image
+mac_vnode_check_exec ignores the platform Sandbox verdict (the Sandbox refuses exec from the Data volume) and process_signature
+ignores the launch-constraint refusal (the owner trust module gives no constraint category); AMFI's signature checks and the
+other policies still decide. A marked exec that fails prints its stage and uid, every MAC policy that refused it in
+vnode_check_exec, and a signature or launch-constraint refusal. The first swaps are logged as "NX769J EXECSWAP".
+
+diff -ru a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+--- a/bsd/kern/kern_exec.c	2026-11-06 21:45:07
++++ b/bsd/kern/kern_exec.c	2026-11-06 22:09:15
+@@ -2131,6 +2131,60 @@
+  *	<ex_imgact>:???			[anything an imgact can return]
+  *	EDEADLK				Process is being terminated
+  */
++/*
++ * NX769J: boot-arg nx769j-execswap=<path>=<replacement>[,<path>=<replacement>] runs <replacement> wherever <path> is executed
++ * (an exact match of the whole path), so a test program can take the place of a RunAtLoad job launchd already knows from its
++ * cache. The replacement still has to pass AMFI on its own signature through the trust cache.
++ *
++ * With the boot-arg set, every exec below /private/var/ngpu/bin/ (the replacements and what they spawn) is marked
++ * IMGPF_NX769J_EXECSWAP. The platform Sandbox refuses exec from the Data volume, so mac_vnode_check_exec ignores the
++ * Sandbox verdict for a marked image, and process_signature ignores its launch-constraint refusal (the owner trust module
++ * gives the binary no constraint category); AMFI's signature checks and every other policy still decide. A marked exec that fails prints its stage,
++ * its uid and every MAC policy that refused it.
++ */
++static int nx769j_exec_test_dir;
++
++static const char *
++nx769j_exec_swap(const char *path)
++{
++	static char arg[256];
++	static const char *from[2], *to[2];
++	static int parsed;
++	static int enabled;
++	static unsigned logged;
++	if (!parsed) {
++		parsed = 1;
++		if (PE_parse_boot_argn("nx769j-execswap", arg, sizeof(arg))) {
++			enabled = 1;
++			char *cursor = arg;
++			for (int n = 0; n < 2 && cursor && *cursor; n++) {
++				char *next = strchr(cursor, ',');
++				if (next) {
++					*next++ = 0;
++				}
++				char *eq = strchr(cursor, '=');
++				if (eq && eq != cursor && eq[1] == '/') {
++					*eq = 0;
++					from[n] = cursor;
++					to[n] = eq + 1;
++				}
++				cursor = next;
++			}
++		}
++	}
++	nx769j_exec_test_dir = enabled;
++	for (int n = 0; n < 2; n++) {
++		if (from[n] && path && strcmp(path, from[n]) == 0) {
++			if (logged < 16) {
++				logged++;
++				printf("NX769J EXECSWAP: %s -> %s\n", from[n], to[n]);
++			}
++			return to[n];
++		}
++	}
++	return NULL;
++}
++
+ static int
+ exec_activate_image(struct image_params *imgp)
+ {
+@@ -2142,6 +2196,7 @@
+ 	int i;
+ 	int itercount = 0;
+ 	proc_t p = vfs_context_proc(imgp->ip_vfs_context);
++	const char *nx769j_stage = "lookup";
+ 
+ 	/*
+ 	 * For exec, the translock needs to be taken on old proc and not
+@@ -2161,6 +2216,20 @@
+ 		goto bad_notrans;
+ 	}
+ 
++	{
++		const char *replacement = nx769j_exec_swap(excpath);
++		if (replacement) {
++			exec_reset_save_path(imgp);
++			error = exec_save_path(imgp, CAST_USER_ADDR_T(replacement), UIO_SYSSPACE, &excpath);
++			if (error) {
++				goto bad_notrans;
++			}
++		}
++		if (nx769j_exec_test_dir && excpath && strncmp(excpath, "/private/var/ngpu/bin/", 22) == 0) {
++			imgp->ip_flags |= IMGPF_NX769J_EXECSWAP;
++		}
++	}
++
+ 	/* Use excpath, which contains the copyin-ed exec path */
+ 	DTRACE_PROC1(exec, uintptr_t, excpath);
+ 
+@@ -2199,6 +2268,7 @@
+ 		goto bad_notrans;
+ 	}
+ 
++	nx769j_stage = "permissions and MAC exec check";
+ 	error = exec_check_permissions(imgp);
+ 	if (error) {
+ 		goto bad;
+@@ -2210,6 +2280,7 @@
+ 		*imgp->ip_origvattr = *imgp->ip_vattr;
+ 	}
+ 
++	nx769j_stage = "header read";
+ 	error = vn_rdwr(UIO_READ, imgp->ip_vp, imgp->ip_vdata, PAGE_SIZE, 0,
+ 	    UIO_SYSSPACE, IO_NODELOCKED,
+ 	    vfs_context_ucred(imgp->ip_vfs_context),
+@@ -2228,6 +2299,7 @@
+ 		error = EBADEXEC;
+ 		goto bad;
+ 	}
++	nx769j_stage = "image activation";
+ 	error = -1;
+ 	for (i = 0; error == -1 && execsw[i].ex_imgact != NULL; i++) {
+ 		error = (*execsw[i].ex_imgact)(imgp);
+@@ -2308,6 +2380,9 @@
+ 
+ bad_notrans:
+ 	if (error) printf("NX769J exec pid %d %s: %d\n", proc_getpid(p), excpath ? excpath : "?", error);
++	if (error && (imgp->ip_flags & IMGPF_NX769J_EXECSWAP)) {
++		printf("NX769J EXECSWAP: failed at %s, uid %d\n", nx769j_stage, kauth_cred_getuid(vfs_context_ucred(imgp->ip_vfs_context)));
++	}
+ 	if (imgp->ip_strings) {
+ 		execargs_free(imgp);
+ 	}
+@@ -8448,6 +8523,9 @@
+ 	 * approve of exec, kill and return immediately.
+ 	 */
+ 	if (imgp->ip_mac_return != 0) {
++		if (imgp->ip_flags & IMGPF_NX769J_EXECSWAP) {
++			printf("NX769J EXECSWAP: MAC image check refused %d\n", imgp->ip_mac_return);
++		}
+ 		boot_progress_process_stage(proc_getpid(p),p->p_name,"exec MAC policy REFUSED");
+ 		KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
+ 		    proc_getpid(p), OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY, 0, 0);
+@@ -8458,6 +8536,9 @@
+ 	}
+ 
+ 	if (imgp->ip_cs_error != OS_REASON_NULL) {
++		if (imgp->ip_flags & IMGPF_NX769J_EXECSWAP) {
++			printf("NX769J EXECSWAP: code signature error\n");
++		}
+ 		signature_failure_reason = imgp->ip_cs_error;
+ 		imgp->ip_cs_error = OS_REASON_NULL;
+ 		error = EACCES;
+@@ -8467,8 +8548,15 @@
+ 	/* call the launch constraints hook */
+ 	os_reason_t launch_constraint_reason;
+ 	if ((error = mac_proc_check_launch_constraints(p, imgp, &launch_constraint_reason)) != 0) {
+-		signature_failure_reason = launch_constraint_reason;
+-		goto done;
++		if (imgp->ip_flags & IMGPF_NX769J_EXECSWAP) {
++			/* A test binary from the owner trust module has no constraint category for launch type 1. */
++			printf("NX769J EXECSWAP: launch constraints refused %d, ignored for /private/var/ngpu/bin\n", error);
++			os_reason_free(launch_constraint_reason);
++			error = 0;
++		} else {
++			signature_failure_reason = launch_constraint_reason;
++			goto done;
++		}
+ 	}
+ 
+ #if XNU_TARGET_OS_OSX
+diff -ru a/bsd/sys/imgact.h b/bsd/sys/imgact.h
+--- a/bsd/sys/imgact.h	2026-11-06 21:45:07
++++ b/bsd/sys/imgact.h	2026-11-06 21:59:00
+@@ -152,6 +152,7 @@
+ #define IMGPF_RESLIDE           0x00001000     /* reslide the shared cache */
+ #define IMGPF_PLUGIN_HOST_DISABLE_A_KEYS  0x00002000     /* process hosts plugins, disable ptr auth A keys */
+ #define IMGPF_HW_TPRO           0x00004000      /* HW support for read-only/read-write trusted paths  */
++#define IMGPF_NX769J_EXECSWAP   0x00010000      /* NX769J: a test binary below /private/var/ngpu/bin/ (nx769j-execswap) */
+ #define IMGPF_ROSETTA           0x10000000      /* load rosetta runtime */
+ #define IMGPF_ALT_ROSETTA       0x20000000      /* load alternative rosetta runtime */
+ #define IMGPF_NOJOP             0x80000000
+diff -ru a/security/mac_vfs.c b/security/mac_vfs.c
+--- a/security/mac_vfs.c	2026-11-06 21:45:07
++++ b/security/mac_vfs.c	2026-11-06 21:59:00
+@@ -1267,11 +1267,18 @@
+ 			size_t spawnattrlen = 0;
+ 			void *spawnattr = exec_spawnattr_getmacpolicyinfo(&imgp->ip_px_smpx, mpc->mpc_name, &spawnattrlen);
+ 
+-			error = mac_error_select(
+-				hook(cred,
+-				vp, imgp->ip_scriptvp, mac_vnode_label(vp), imgp->ip_scriptlabelp,
+-				imgp->ip_execlabelp, &imgp->ip_ndp->ni_cnd, &imgp->ip_csflags,
+-				spawnattr, spawnattrlen), error);
++			int nx769j_result = hook(cred,
++			    vp, imgp->ip_scriptvp, mac_vnode_label(vp), imgp->ip_scriptlabelp,
++			    imgp->ip_execlabelp, &imgp->ip_ndp->ni_cnd, &imgp->ip_csflags,
++			    spawnattr, spawnattrlen);
++			if (nx769j_result && (imgp->ip_flags & IMGPF_NX769J_EXECSWAP)) {
++				printf("NX769J EXECSWAP: policy %s vnode_check_exec -> %d%s\n", mpc->mpc_name, nx769j_result,
++				    strcmp(mpc->mpc_name, "Sandbox") == 0 ? ", ignored for /private/var/ngpu/bin" : "");
++				if (strcmp(mpc->mpc_name, "Sandbox") == 0) {
++					nx769j_result = 0;
++				}
++			}
++			error = mac_error_select(nx769j_result, error);
+ 		}
+ 		if (mac_policy_list_conditional_busy() != 0) {
+ 			for (; i <= mac_policy_list.maxindex; i++) {
+@@ -1288,11 +1295,18 @@
+ 				size_t spawnattrlen = 0;
+ 				void *spawnattr = exec_spawnattr_getmacpolicyinfo(&imgp->ip_px_smpx, mpc->mpc_name, &spawnattrlen);
+ 
+-				error = mac_error_select(
+-					hook(cred,
+-					vp, imgp->ip_scriptvp, mac_vnode_label(vp), imgp->ip_scriptlabelp,
+-					imgp->ip_execlabelp, &imgp->ip_ndp->ni_cnd, &imgp->ip_csflags,
+-					spawnattr, spawnattrlen), error);
++				int nx769j_result = hook(cred,
++				    vp, imgp->ip_scriptvp, mac_vnode_label(vp), imgp->ip_scriptlabelp,
++				    imgp->ip_execlabelp, &imgp->ip_ndp->ni_cnd, &imgp->ip_csflags,
++				    spawnattr, spawnattrlen);
++				if (nx769j_result && (imgp->ip_flags & IMGPF_NX769J_EXECSWAP)) {
++					printf("NX769J EXECSWAP: policy %s vnode_check_exec -> %d%s\n", mpc->mpc_name, nx769j_result,
++				    strcmp(mpc->mpc_name, "Sandbox") == 0 ? ", ignored for /private/var/ngpu/bin" : "");
++				if (strcmp(mpc->mpc_name, "Sandbox") == 0) {
++					nx769j_result = 0;
++				}
++				}
++				error = mac_error_select(nx769j_result, error);
+ 			}
+ 			mac_policy_list_unbusy();
+ 		}
