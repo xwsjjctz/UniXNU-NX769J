@@ -120,10 +120,31 @@ xcrun strip -x "$TU"
 glslangValidator -V --target-env vulkan1.1 --vn fill_spv -o "$B/fill_spv.h" "$TP/vktest/fill.comp" > /dev/null
 glslangValidator -V --target-env vulkan1.1 --vn tri_vert_spv -o "$B/tri_vert_spv.h" "$TP/vktest/tri.vert" > /dev/null
 glslangValidator -V --target-env vulkan1.1 --vn tri_frag_spv -o "$B/tri_frag_spv.h" "$TP/vktest/tri.frag" > /dev/null
-# NX769J paths: Turnip inside the plugin bundle (/usr/lib is on the sealed system volume), mtltest from the GPU addon.
-sed -e 's|#define DRIVER "/usr/lib/libvulkan_freedreno.dylib"|#define DRIVER "/System/Library/Extensions/NativeAdrenoMetal.bundle/libvulkan_freedreno.dylib"|' \
-	-e 's|#define MTLTEST "/usr/libexec/mtltest"|#define MTLTEST "/private/var/ngpu/bin/mtltest"|' "$TP/vktest/vktest.c" > "$B/vktest.c"
-grep -q 'NativeAdrenoMetal.bundle/libvulkan_freedreno.dylib' "$B/vktest.c" && grep -q 'ngpu/bin/mtltest' "$B/vktest.c"
+# NX769J: Turnip inside the plugin bundle (/usr/lib is on the sealed system volume), mtltest from the GPU addon, and extra
+# TU_DEBUG flags from the boot-arg nx769j-tudebug=<csv> so a Turnip debug flag can be tried without rebuilding the userland.
+python3 - "$TP/vktest/vktest.c" "$B/vktest.c" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+s = s.replace('#define DRIVER "/usr/lib/libvulkan_freedreno.dylib"',
+              '#define DRIVER "/System/Library/Extensions/NativeAdrenoMetal.bundle/libvulkan_freedreno.dylib"')
+s = s.replace('#define MTLTEST "/usr/libexec/mtltest"', '#define MTLTEST "/private/var/ngpu/bin/mtltest"')
+old = '\tsetenv("TU_DEBUG", "sysmem,nocb", 1);     /* no GMEM binning, no concurrent binning yet */'
+new = ('\t{\n'
+       '\t\tchar td[256] = "sysmem,nocb";   /* no GMEM binning, no concurrent binning yet */\n'
+       '\t\tconst char *extra = strstr(args, "nx769j-tudebug=");\n'
+       '\t\tif (extra) {\n'
+       '\t\t\textra += sizeof("nx769j-tudebug=") - 1;\n'
+       '\t\t\tsize_t k = strlen(td); td[k++] = \',\';\n'
+       '\t\t\twhile (*extra && *extra != \' \' && k < sizeof(td) - 1) td[k++] = *extra++;\n'
+       '\t\t\ttd[k] = 0;\n'
+       '\t\t}\n'
+       '\t\tsetenv("TU_DEBUG", td, 1);\n'
+       '\t\tsay("VKTEST: TU_DEBUG=%s", td);\n'
+       '\t}')
+assert s.count(old) == 1, 'TU_DEBUG anchor not found'
+open(sys.argv[2], 'w').write(s.replace(old, new))
+PY
+grep -q 'NativeAdrenoMetal.bundle/libvulkan_freedreno.dylib' "$B/vktest.c" && grep -q 'ngpu/bin/mtltest' "$B/vktest.c" && grep -q 'nx769j-tudebug' "$B/vktest.c"
 xcrun clang -target arm64-apple-ios16.0 -isysroot "$SDK" -O2 -Wall -I "$U/.cache/mesa-work/include" -I "$B" \
 	"$B/vktest.c" -o "$OUT/vktest"
 # The test programs open the accelerator's user client: the grant UniXNU's probe daemon carries (adrenoprobed-entitlements).
