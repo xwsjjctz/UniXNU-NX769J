@@ -62,5 +62,21 @@ correctly** (`vktest` part 3 and part 4, 0 of 4096 words wrong). Two things do n
 - **Buffer fill/update returns wrong data** (`vktest` part 2): the fence signals but the CPU reads a wrong pattern, a data or
   cache-coherency problem distinct from the part 5 hang.
 
+### Graphics hang: ruled out
+
+Narrowed by elimination against houji (same SM8650 / Adreno 750, which reaches GPU composition through a vendor UEFI handoff). None of these is the cause:
+
+| Lead | Test | Result |
+| --- | --- | --- |
+| Clock gating | `nx769j-gpu-nocgc=1` (clocks always on) | every submit hangs, even the clear/compute that pass; CGC must stay on |
+| GBIF bus interface | write `GBIF_QSB_SIDE`/`GBIF_CX_CONFIG` from the kernel | wedges the bus; GBIF is firmware/GMU owned |
+| Missing hwInit registers | compare with houji `GpuGen7Table.h` | every shared register matches |
+| Ring submit epilogue | diff `NativeAdrenoRing` | `CCU_INVALIDATE_DEPTH`/`COLOR` fence sequence is byte-identical to houji |
+| Memory-path clocks | read the GCC branches | `gcc_gpu_memnoc_gfx` and `gcc_ddrss_gpu_axi` are both voted on |
+| GPU voltage/frequency | vote the highest OPP (`nx769j-gpu-perf`) | part 5 still hangs |
+
+Everything comparable to houji matches. The remaining difference is the GMU-managed HFI startup state the vendor firmware
+sets up and this port hand-rolls (ACD, startup votes), which needs offline study of houji's GMU bootstrap, not more register probing.
+
 Clock gating must stay on: `nx769j-gpu-nocgc=1` makes even the image clear and compute hang. The device results are in
 `docs/DEVICE-EVIDENCE.md` (`gpu1`..`gpu3`, and the `gpu11`..`gpu16` user-path runs). iOS still composes on the CPU.
